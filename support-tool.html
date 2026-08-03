@@ -228,6 +228,23 @@
   select{ border:1px solid var(--line); border-radius:6px; padding:7px 9px; font-size:13px; background:#fff; }
   /* 비교 결과 행/셀 강조 */
   #cmpTable td{ white-space:normal; }
+  /* 비교: 기준 컬럼(복합키) 행 */
+  .key-pairs{ display:flex; flex-direction:column; gap:6px; }
+  .key-pair{ display:flex; align-items:center; gap:8px; }
+  .key-pair .kp-no{ flex:0 0 auto; font-size:12px; color:var(--muted); min-width:44px; }
+  .key-pair select{ width:220px; }
+  .key-pair .kp-del{ flex:0 0 auto; border:0; background:none; color:#b23c17; cursor:pointer; font-size:13px; padding:0 4px; }
+  /* 비교: 열 매핑 표 */
+  #colMapTable td, #colMapTable th{ white-space:nowrap; }
+  #colMapTable select{ width:210px; }
+  #colMapTable td.map-state{ font-size:12px; }
+  .map-ok{ color:#2e7d32; } .map-off{ color:#8a97a5; } .map-warn{ color:#b98a00; }
+  /* 비교 결과(가로형): 변경 셀 강조 */
+  #cmpTable td.cmp-diff{ background:#FFF7DE; }
+  #cmpTable td.cmp-anom{ background:#FDE2DC; }
+  #cmpTable .cmp-old{ color:#8a4b00; }
+  #cmpTable .cmp-new{ font-weight:700; }
+  #cmpTable .cmp-same{ color:#5a6b7b; }
   tr.st-add td{ background:#E9F7EC; }
   tr.st-del td{ background:#FDECEA; }
   tr.st-chg td{ background:#FFFBEA; }
@@ -614,22 +631,39 @@
       <div id="cmpFileError" class="dz-error hidden" role="alert" aria-live="assertive"></div>
     </div>
 
-    <!-- 비교 ② 기준 컬럼 -->
+    <!-- 비교 ② 행 매칭 기준(기준 컬럼 · 복합키 지원) -->
     <div class="panel">
-      <h2><span class="badge">2</span> 기준 컬럼 선택 (행 매칭 기준)</h2>
-      <p class="muted">두 파일의 행을 짝지어 줄 기준 컬럼(예: 관리번호, 업체명)을 선택해 주세요.
-        두 파일을 모두 올리시면 가장 알맞은 컬럼을 자동으로 추천해 드립니다.</p>
-      <div class="row" style="display:flex; justify-content:center; align-items:center";>
-        <label class="muted">파일 A&nbsp;<select id="keyA" style="width:220px;" disabled aria-label="파일 A 기준 컬럼"></select></label>
-        <span aria-hidden="true" style="font-weight:700;">↔</span>
-        <label class="muted">파일 B&nbsp;<select id="keyB" style="width:220px;" disabled aria-label="파일 B 기준 컬럼"></select></label>
+      <h2><span class="badge">2</span> 행 매칭 기준 (같은 행 찾기)</h2>
+      <p class="muted">두 파일에서 <b>같은 행</b>을 찾아낼 기준 컬럼을 고릅니다.
+        기준값이 같은 행끼리 짝지은 뒤, 아래 ③에서 매핑한 <b>나머지 열의 값을 1:1로 비교</b>합니다.
+        기준값이 중복되면 [기준 컬럼 추가]로 여러 열을 조합해 주세요.</p>
+      <div id="keyPairs" class="key-pairs"></div>
+      <div class="row" style="margin-top:8px;">
+        <button type="button" id="btnAddKey" class="secondary" disabled>＋ 기준 컬럼 추가</button>
       </div>
       <div id="keyHint" class="note"></div>
+      <div id="keyPreview" class="note"></div>
     </div>
 
-    <!-- 비교 ③ 이상 변동 기준 -->
+    <!-- 비교 ③ 열 매핑 -->
+    <div class="panel coll" id="colMapPanel">
+      <h2><span><span class="badge">3</span> 열 매핑 (비교할 열 짝짓기)</span><span class="coll-caret" aria-hidden="true">▼</span></h2>
+      <p class="muted">A 파일의 각 열을 B 파일의 어떤 열과 비교할지 정합니다.
+        컬럼명이 달라도(예: <b>2023년 매출 ↔ 2024년 매출</b>) 여기서 직접 지정하시면 비교됩니다.
+        비교에서 빼려면 <b>(비교 안 함)</b> 을 선택해 주세요.</p>
+      <div class="row" style="margin-bottom:8px;">
+        <button type="button" id="btnMapAuto" class="secondary" disabled>이름으로 자동 매핑</button>
+        <button type="button" id="btnMapByPos" class="secondary" disabled>순서대로 매핑</button>
+        <span id="mapSummary" class="muted"></span>
+      </div>
+      <div class="tbl-scroll" style="max-height:260px;">
+        <table id="colMapTable"><thead></thead><tbody></tbody></table>
+      </div>
+    </div>
+
+    <!-- 비교 ④ 이상 변동 기준 -->
     <div class="panel">
-      <h2><span class="badge">3</span> 이상 변동 판정 기준</h2>
+      <h2><span class="badge">4</span> 이상 변동 판정 기준</h2>
       <div class="grid-opts">
         <label><input type="checkbox" id="opt_cmp_rate" checked> 변화율 기준</label>
         <label><input type="checkbox" id="opt_cmp_z" checked> Z-Score 기반 변화량</label>
@@ -5237,10 +5271,28 @@ window.__infoTooltip = InfoTooltip;
     return { values: seen, count, uniq: count ? seen.size / count : 0 };
   }
 
-  /** 기준 컬럼 쌍 자동 추론. 확신이 낮으면 null. */
+  // 식별자처럼 보이는 컬럼명(키 후보 가점) — 측정값 컬럼과 구분하기 위해 사용
+  const ID_NAME_RE = /(\uBC88\uD638|\uCF54\uB4DC|\uC544\uC774\uB514|\uBA85|\uC774\uB984|\uD0A4|id|no|code|key|name)/i;
+  /** 값의 대부분이 숫자인지(=측정값 컬럼) 판정. 키로는 부적합하다. */
+  function isMeasureCol(table, idx, name) {
+    if (ID_NAME_RE.test(String(name))) return false;
+    let num = 0, tot = 0;
+    const n = Math.min(table.rows.length, 500);
+    for (let r = 0; r < n; r++) {
+      const v = table.rows[r][idx];
+      if (Values.isMissing(v)) continue;
+      tot++; if (typeof v === "number" || Values.toNumber(v) !== null) num++;
+    }
+    return tot > 0 && num / tot >= 0.9;
+  }
+  /** 기준 컬럼 쌍 자동 추론. 확신이 낮으면 null.
+   *  이름 유사도 + 고유도 + 값 겹침에 더해, 식별자형 이름은 가점 / 숫자 측정값 컬럼은 감점한다.
+   *  (측정값 컬럼이 기준으로 뽑히면 엉뚱한 행끼리 매칭되므로) */
   function inferKeys(tA, tB) {
     const profA = tA.columns.map((c, i) => colProfile(tA, i));
     const profB = tB.columns.map((c, i) => colProfile(tB, i));
+    const measA = tA.columns.map((c, i) => isMeasureCol(tA, i, c));
+    const measB = tB.columns.map((c, i) => isMeasureCol(tB, i, c));
     let best = null;
     for (let i = 0; i < tA.columns.length; i++) {
       for (let j = 0; j < tB.columns.length; j++) {
@@ -5251,8 +5303,10 @@ window.__infoTooltip = InfoTooltip;
         const big = small === pa.values ? pb.values : pa.values;
         for (const v of small) if (big.has(v)) inter++;
         const overlap = inter / Math.max(1, Math.min(pa.values.size, pb.values.size));
-        const score = 0.45 * nameScore(tA.columns[i], tB.columns[j])
-          + 0.25 * Math.min(pa.uniq, pb.uniq) + 0.30 * overlap;
+        const idBonus = (ID_NAME_RE.test(tA.columns[i]) && ID_NAME_RE.test(tB.columns[j])) ? 1 : 0;
+        const penalty = (measA[i] || measB[j]) ? 0.35 : 0;
+        const score = 0.40 * nameScore(tA.columns[i], tB.columns[j])
+          + 0.25 * Math.min(pa.uniq, pb.uniq) + 0.25 * overlap + 0.10 * idBonus - penalty;
         if (!best || score > best.score) best = { i, j, score };
       }
     }
@@ -5270,44 +5324,188 @@ window.__infoTooltip = InfoTooltip;
     sel.disabled = false;
   }
 
+  /* ---------- 기준 컬럼(복합키) UI ---------- */
+  /** 현재 화면의 기준 컬럼 쌍 목록 [{a,b}] 을 읽는다. */
+  function getKeyPairs() {
+    return [...document.querySelectorAll("#keyPairs .key-pair")].map((row) => ({
+      a: parseInt(row.querySelector(".kp-a").value, 10),
+      b: parseInt(row.querySelector(".kp-b").value, 10),
+    })).filter((p) => Number.isFinite(p.a) && Number.isFinite(p.b));
+  }
+  /** 기준 컬럼 쌍 한 줄을 그린다. 첫 줄은 id(keyA/keyB)를 유지한다. */
+  function addKeyPairRow(ai, bi) {
+    const box = $("keyPairs"), no = box.children.length;
+    const row = document.createElement("div");
+    row.className = "key-pair";
+    const idA = no === 0 ? ' id="keyA"' : "", idB = no === 0 ? ' id="keyB"' : "";
+    row.innerHTML = '<span class="kp-no">' + (no === 0 ? "기준" : "추가 " + no) + "</span>" +
+      '<label class="muted">A&nbsp;<select class="kp-a"' + idA + ' aria-label="파일 A 기준 컬럼"></select></label>' +
+      '<span aria-hidden="true" style="font-weight:700;">↔</span>' +
+      '<label class="muted">B&nbsp;<select class="kp-b"' + idB + ' aria-label="파일 B 기준 컬럼"></select></label>' +
+      (no === 0 ? "" : '<button type="button" class="kp-del" title="이 기준 컬럼 제거">✕</button>');
+    box.appendChild(row);
+    fillSelect(row.querySelector(".kp-a"), slots.A.table.columns, ai);
+    fillSelect(row.querySelector(".kp-b"), slots.B.table.columns, bi);
+    // 기준 컬럼이 바뀌면 열 매핑 표도 다시 그린다(기준 컬럼은 비교 대상에서 잠김)
+    row.querySelectorAll("select").forEach((s) => s.addEventListener("change", () => {
+      renderColMap(getColMap()); updateKeyPreview();
+    }));
+    const del = row.querySelector(".kp-del");
+    if (del) del.addEventListener("click", () => { row.remove(); renumberKeyPairs(); renderColMap(getColMap()); updateKeyPreview(); });
+  }
+  function renumberKeyPairs() {
+    [...document.querySelectorAll("#keyPairs .key-pair")].forEach((row, i) => {
+      row.querySelector(".kp-no").textContent = i === 0 ? "기준" : "추가 " + i;
+    });
+  }
+  /** 현재 기준 컬럼으로 몇 행이 짝지어지는지 미리 보여 준다(비교 전 확인용). */
+  function updateKeyPreview() {
+    const pairs = getKeyPairs();
+    if (!pairs.length || !slots.A || !slots.B) { $("keyPreview").textContent = ""; return; }
+    const ga = groupByKey(slots.A.table, pairs.map((p) => p.a));
+    const gb = groupByKey(slots.B.table, pairs.map((p) => p.b));
+    let matched = 0, onlyA = 0, dup = 0;
+    for (const [k, arr] of ga.groups) {
+      const arrB = gb.groups.get(k);
+      if (arrB) { matched += Math.min(arr.length, arrB.length); if (arr.length > 1 || arrB.length > 1) dup++; }
+      else onlyA += arr.length;
+    }
+    let onlyB = 0;
+    for (const [k, arr] of gb.groups) if (!ga.groups.has(k)) onlyB += arr.length;
+    $("keyPreview").innerHTML = "행 매칭 미리보기: <b>" + matched + "행</b> 짝지어짐 · A에만 " + onlyA +
+      "행 · B에만 " + onlyB + "행" + (dup ? " · <b>기준값 중복 " + dup + "건</b>(기준 컬럼을 추가하시면 정확해집니다)" : "") +
+      (ga.emptyKey || gb.emptyKey ? " · 기준값 빈 행 제외 A " + ga.emptyKey + "/B " + gb.emptyKey : "");
+  }
+
+  /* ---------- 열 매핑 UI ---------- */
+  /** 이름 유사도 기반 자동 매핑(키 컬럼 제외) → Map(aIdx -> bIdx) */
+  function autoColMap(tA, tB, keyPairs) {
+    const map = new Map(), usedB = new Set();
+    keyPairs.forEach((p) => { map.set(p.a, p.b); usedB.add(p.b); });
+    tA.columns.forEach((ca, i) => {
+      if (map.has(i)) return;
+      let bestJ = -1, bestS = 0;
+      tB.columns.forEach((cb, j) => {
+        if (usedB.has(j)) return;
+        const s = nameScore(ca, cb);
+        if (s > bestS) { bestS = s; bestJ = j; }
+      });
+      if (bestJ >= 0 && bestS >= 0.75) { map.set(i, bestJ); usedB.add(bestJ); }
+    });
+    return map;
+  }
+  /** 남은 열을 순서대로 짝짓는다(이름이 달라도 위치가 같으면 비교되도록). */
+  function posColMap(tA, tB, keyPairs) {
+    const map = new Map(), usedB = new Set();
+    keyPairs.forEach((p) => { map.set(p.a, p.b); usedB.add(p.b); });
+    const restB = tB.columns.map((c, j) => j).filter((j) => !usedB.has(j));
+    let k = 0;
+    tA.columns.forEach((c, i) => { if (map.has(i)) return; if (k < restB.length) map.set(i, restB[k++]); });
+    return map;
+  }
+  /** 열 매핑 표를 그린다. sel 값 ""=비교 안 함 */
+  function renderColMap(map) {
+    const tA = slots.A.table, tB = slots.B.table;
+    const keySet = new Set(getKeyPairs().map((p) => p.a));
+    const thead = $("colMapTable").querySelector("thead");
+    const tbody = $("colMapTable").querySelector("tbody");
+    thead.innerHTML = "<tr><th>A 파일 열</th><th>비교 대상 (B 파일 열)</th><th>구분</th></tr>";
+    tbody.innerHTML = tA.columns.map((c, i) => {
+      const isKey = keySet.has(i);
+      const bi = map.has(i) ? map.get(i) : "";
+      const opts = ['<option value="">(비교 안 함)</option>'].concat(
+        tB.columns.map((cb, j) => '<option value="' + j + '"' + (j === bi ? " selected" : "") + ">" + esc(cb) + "</option>")
+      ).join("");
+      const state = isKey ? '<span class="map-ok">행 매칭 기준</span>'
+        : (bi === "" ? '<span class="map-off">비교 안 함</span>'
+          : (norm(tA.columns[i]) === norm(tB.columns[bi]) ? '<span class="map-ok">이름 일치</span>'
+            : '<span class="map-warn">이름 다름</span>'));
+      return "<tr><td>" + esc(c) + "</td><td>" +
+        '<select class="cm-b" data-i="' + i + '"' + (isKey ? " disabled" : "") + ">" + opts + "</select></td>" +
+        '<td class="map-state">' + state + "</td></tr>";
+    }).join("");
+    tbody.querySelectorAll(".cm-b").forEach((s) => s.addEventListener("change", () => renderColMap(getColMap())));
+    const mapped = [...map.keys()].filter((i) => !keySet.has(i)).length;
+    const onlyB = tB.columns.length - new Set([...map.values()]).size;
+    $("mapSummary").textContent = "비교 열 " + mapped + "개" + (onlyB > 0 ? " · B에만 있는 열 " + onlyB + "개(제외)" : "");
+  }
+  /** 화면의 열 매핑 표를 Map(aIdx -> bIdx) 으로 읽는다(기준 컬럼 포함). */
+  function getColMap() {
+    const map = new Map();
+    getKeyPairs().forEach((p) => map.set(p.a, p.b));
+    document.querySelectorAll("#colMapTable .cm-b").forEach((s) => {
+      const i = parseInt(s.dataset.i, 10);
+      if (map.has(i)) return;                       // 기준 컬럼은 강제 매핑 유지
+      if (s.value !== "") map.set(i, parseInt(s.value, 10));
+    });
+    return map;
+  }
+
   /** 두 슬롯 상태가 바뀔 때: 키 후보 갱신 + 버튼 활성화. */
   function afterSlotsChanged() {
     // 두 슬롯 모두 로드되고 선택 시트에 컬럼이 있어야 비교 가능
     const ready = !!(slots.A && slots.B && slots.A.table && slots.A.table.columns.length &&
       slots.B.table && slots.B.table.columns.length);
     $("btnCompare").disabled = !ready;
+    $("btnAddKey").disabled = !ready;
+    $("btnMapAuto").disabled = !ready; $("btnMapByPos").disabled = !ready;
+    $("keyPairs").innerHTML = "";
+    $("colMapTable").querySelector("thead").innerHTML = "";
+    $("colMapTable").querySelector("tbody").innerHTML = "";
+    $("mapSummary").textContent = "";
     if (!ready) {
-      $("keyA").innerHTML = ""; $("keyB").innerHTML = "";
-      $("keyA").disabled = true; $("keyB").disabled = true;
-      $("keyHint").textContent = "";
+      $("keyHint").textContent = ""; $("keyPreview").textContent = "";
       setCmpStatus("파일 A와 B를 모두 올려 주시면 비교를 시작할 수 있습니다.");
       setCmpProgress(0);
       return;
     }
     const hit = inferKeys(slots.A.table, slots.B.table);
-    fillSelect($("keyA"), slots.A.table.columns, hit ? hit.i : 0);
-    fillSelect($("keyB"), slots.B.table.columns, hit ? hit.j : 0);
+    addKeyPairRow(hit ? hit.i : 0, hit ? hit.j : 0);
     if (hit) {
       $("keyHint").textContent = "자동 추천: A의 '" + slots.A.table.columns[hit.i] +
-        "' ↔ B의 '" + slots.B.table.columns[hit.j] + "' 컬럼이 기준으로 가장 적합해 보입니다. 다른 컬럼으로 바꾸실 수도 있습니다.";
+        "' ↔ B의 '" + slots.B.table.columns[hit.j] + "' 컬럼을 행 매칭 기준으로 사용합니다. 직접 바꾸실 수 있습니다.";
     } else {
       $("keyHint").textContent = "기준 컬럼을 자동으로 찾지 못했습니다. 두 파일에서 같은 대상을 가리키는 컬럼을 직접 선택해 주세요.";
     }
-    setCmpStatus("기준 컬럼을 확인하신 뒤 [비교 시작] 버튼을 눌러 주세요.");
+    // 열 매핑: 이름으로 자동 → 짝지어진 열이 하나도 없으면 순서대로 매핑으로 폴백
+    const kp = getKeyPairs(), keySetAuto = new Set(kp.map((p) => p.a));
+    let map0 = autoColMap(slots.A.table, slots.B.table, kp);
+    let fellBack = false;
+    if ([...map0.keys()].filter((i) => !keySetAuto.has(i)).length === 0) {
+      map0 = posColMap(slots.A.table, slots.B.table, kp); fellBack = true;
+    }
+    renderColMap(map0);
+    if (fellBack) {
+      $("keyHint").innerHTML += "<br><b>\uCEEC\uB7FC\uBA85\uC774 \uC11C\uB85C \uB2EC\uB77C(\uC608: 2023\uB144 \u2194 2024\uB144) \uC5F4\uC744 \uC21C\uC11C\uB300\uB85C \uB9E4\uD551\uD588\uC2B5\uB2C8\uB2E4.</b> \u2462 \uC5F4 \uB9E4\uD551\uC5D0\uC11C \uD655\uC778\u00B7\uC218\uC815\uD574 \uC8FC\uC138\uC694.";
+    }
+    updateKeyPreview();
+    setCmpStatus("기준 컬럼과 열 매핑을 확인하신 뒤 [비교 시작] 버튼을 눌러 주세요.");
   }
+  $("btnAddKey").addEventListener("click", () => {
+    if (!slots.A || !slots.B) return;
+    addKeyPairRow(0, 0); renumberKeyPairs();
+    renderColMap(getColMap()); updateKeyPreview();
+  });
+  $("btnMapAuto").addEventListener("click", () => renderColMap(autoColMap(slots.A.table, slots.B.table, getKeyPairs())));
+  $("btnMapByPos").addEventListener("click", () => renderColMap(posColMap(slots.A.table, slots.B.table, getKeyPairs())));
 
   /* ---------- 비교 핵심 로직 ---------- */
-  /** 키 값 -> 행 위치 배열 (빈 키는 제외하고 개수만 센다). */
-  function groupByKey(table, keyIdx) {
+  /** 기준값(복합키) -> 행 위치 배열. keyIdxs 는 배열(단일 인덱스도 허용).
+   *  모든 기준 컬럼이 비어 있는 행은 제외하고 개수만 센다. */
+  function groupByKey(table, keyIdxs) {
+    const idxs = Array.isArray(keyIdxs) ? keyIdxs : [keyIdxs];
     const groups = new Map(); let emptyKey = 0;
     for (let r = 0; r < table.rows.length; r++) {
-      const k = Values.cellText(table.rows[r][keyIdx]).trim();
-      if (k === "") { emptyKey++; continue; }
+      const parts = idxs.map((i) => Values.cellText(table.rows[r][i]).trim());
+      if (parts.every((p) => p === "")) { emptyKey++; continue; }
+      const k = parts.join("\u001F");           // 복합키 결합(데이터에 없는 제어문자로 구분)
       if (!groups.has(k)) groups.set(k, []);
       groups.get(k).push(r);
     }
     return { groups, emptyKey };
   }
+  /** 복합키 표시용: 내부 구분자를 사람이 읽는 형태로 */
+  function keyLabel(k) { return String(k).split("\u001F").join(" · "); }
 
   /** 비교용 텍스트 정규화(공백 정리 + 불리언 표기 통일). */
   function normText(v) {
@@ -5316,48 +5514,40 @@ window.__infoTooltip = InfoTooltip;
   }
 
   /** A/B 두 테이블을 비교해 레코드 목록과 요약을 만든다. */
-  function compareTables(tA, tB, kaIdx, kbIdx, opts) {
-    // 1) 컬럼 매핑(키 컬럼은 강제 매핑, 나머지는 이름 유사도 0.75 이상)
-    const mapAB = new Map([[kaIdx, kbIdx]]);
-    const usedB = new Set([kbIdx]);
-    tA.columns.forEach((ca, i) => {
-      if (i === kaIdx) return;
-      let bestJ = -1, bestS = 0;
-      tB.columns.forEach((cb, j) => {
-        if (usedB.has(j) || j === kbIdx) return;
-        const s = nameScore(ca, cb);
-        if (s > bestS) { bestS = s; bestJ = j; }
-      });
-      if (bestJ >= 0 && bestS >= 0.75) { mapAB.set(i, bestJ); usedB.add(bestJ); }
-    });
+  function compareTables(tA, tB, keyPairs, opts, colMap) {
+    const pairs = keyPairs.map((p) => ({ a: p.a, b: p.b }));
+    const keyIdxA = pairs.map((p) => p.a), keyIdxB = pairs.map((p) => p.b);
+
+    // 1) 컬럼 매핑: 사용자가 지정한 매핑을 그대로 사용(없으면 이름 유사도 자동)
+    const mapAB = colMap instanceof Map ? new Map(colMap) : autoColMap(tA, tB, pairs);
+    pairs.forEach((p) => mapAB.set(p.a, p.b));      // 기준 컬럼은 항상 매핑
+    const usedB = new Set([...mapAB.values()]);
+    const keySetA = new Set(keyIdxA);
     const onlyA = tA.columns.filter((c, i) => !mapAB.has(i));
     const onlyB = tB.columns.filter((c, j) => !usedB.has(j));
+    // 비교 대상 열(기준 컬럼 제외) — 결과 표의 가로 컬럼이 된다
+    const compareCols = [...mapAB.entries()].filter((e) => !keySetA.has(e[0]))
+      .map((e) => ({ ai: e[0], bi: e[1], name: tA.columns[e[0]], nameB: tB.columns[e[1]] }));
+    const keyCols = pairs.map((p) => ({ ai: p.a, bi: p.b, name: tA.columns[p.a] }));
 
     // 2) 키 그룹화 및 행 매칭(중복 키는 등장 순서대로 짝지음)
-    const ga = groupByKey(tA, kaIdx), gb = groupByKey(tB, kbIdx);
+    const ga = groupByKey(tA, keyIdxA), gb = groupByKey(tB, keyIdxB);
     let dupKeys = 0;
     const records = [];
-    // 추가/삭제 행의 내용 스냅샷(결과 표/다운로드에서 무엇이 바뀌었는지 보여 주기 위함)
-    const SNAP_MAX = 12;
-    const snap = (t, ri) => {
-      const parts = t.columns.slice(0, SNAP_MAX).map((c, i) => [c, Values.cellText(t.rows[ri][i])]);
-      if (t.columns.length > SNAP_MAX) parts.push(["…", "외 " + (t.columns.length - SNAP_MAX) + "개 컬럼"]);
-      return parts;
-    };
     // 컬럼별 '변화 없음(0)' 수치 쌍 개수 — 이상 변동 통계의 모수에 포함한다.
     const zeroByCol = new Map();
     for (const [key, arrA] of ga.groups) {
       const arrB = gb.groups.get(key) || [];
       if (arrA.length > 1 || arrB.length > 1) dupKeys++;
       const m = Math.min(arrA.length, arrB.length);
-      for (let k = 0; k < m; k++) records.push(compareRow(tA, tB, mapAB, key, arrA[k], arrB[k], zeroByCol));
-      for (let k = m; k < arrA.length; k++) records.push({ status: "삭제", key, tags: [], cells: [], snapshot: snap(tA, arrA[k]) });
-      for (let k = m; k < arrB.length; k++) records.push({ status: "추가", key, tags: [], cells: [], snapshot: snap(tB, arrB[k]) });
+      for (let k = 0; k < m; k++) records.push(compareRow(tA, tB, mapAB, key, arrA[k], arrB[k], zeroByCol, keySetA));
+      for (let k = m; k < arrA.length; k++) records.push({ status: "삭제", key, tags: [], cells: [], ai: arrA[k], bi: null });
+      for (let k = m; k < arrB.length; k++) records.push({ status: "추가", key, tags: [], cells: [], ai: null, bi: arrB[k] });
     }
     for (const [key, arrB] of gb.groups) {
       if (ga.groups.has(key)) continue;
       if (arrB.length > 1) dupKeys++;
-      for (let k = 0; k < arrB.length; k++) records.push({ status: "추가", key, tags: [], cells: [], snapshot: snap(tB, arrB[k]) });
+      for (let k = 0; k < arrB.length; k++) records.push({ status: "추가", key, tags: [], cells: [], ai: null, bi: arrB[k] });
     }
 
     // 3) 이상 변동 판정(수치 변화 셀 대상, 변화 없음 0 도 모수에 포함)
@@ -5383,14 +5573,17 @@ window.__infoTooltip = InfoTooltip;
     if (onlyA.length) notes.push("A에만 있는 컬럼(비교 제외): " + onlyA.join(", "));
     if (onlyB.length) notes.push("B에만 있는 컬럼(비교 제외): " + onlyB.join(", "));
     if (ga.emptyKey || gb.emptyKey) notes.push("기준값이 비어 있어 비교에서 제외된 행: A " + ga.emptyKey + "건, B " + gb.emptyKey + "건");
-    if (dupKeys) notes.push("같은 기준값이 여러 번 나타나는 키 " + dupKeys + "건은 등장 순서대로 짝지어 비교했습니다.");
-    return { records, summary, notes };
+    if (dupKeys) notes.push("같은 기준값이 여러 번 나타나는 키 " + dupKeys + "건은 등장 순서대로 짝지어 비교했습니다. (기준 컬럼을 추가하시면 정확해집니다)");
+    const renamed = compareCols.filter((c) => norm(c.name) !== norm(c.nameB));
+    if (renamed.length) notes.push("이름이 다른 열을 짝지어 비교했습니다: " + renamed.map((c) => c.name + " ↔ " + c.nameB).join(", "));
+    return { records, summary, notes, compareCols, keyCols, tA, tB };
   }
 
   /** 매칭된 두 행의 셀 단위 비교. 동일한 수치 쌍은 zeroByCol 에 집계한다. */
-  function compareRow(tA, tB, mapAB, key, ai, bi, zeroByCol) {
+  function compareRow(tA, tB, mapAB, key, ai, bi, zeroByCol, keySetA) {
     const cells = []; const tags = [];
     for (const [i, j] of mapAB) {
+      if (keySetA && keySetA.has(i)) continue;      // 기준 컬럼은 매칭에 쓰였으므로 비교 대상에서 제외
       const col = tA.columns[i];
       const va = tA.rows[ai][i], vb = tB.rows[bi][j];
       const misA = Values.isMissing(va), misB = Values.isMissing(vb);
@@ -5425,7 +5618,7 @@ window.__infoTooltip = InfoTooltip;
         }
       }
     }
-    return { status: cells.length ? "변경" : "동일", key, tags, cells };
+    return { status: cells.length ? "변경" : "동일", key, tags, cells, ai, bi };
   }
 
   /** 이상 변동 규칙(변화율/Z-Score/IQR)을 수치 변화 셀에 적용한다.
@@ -5490,8 +5683,12 @@ window.__infoTooltip = InfoTooltip;
   /* ---------- 실행/렌더 ---------- */
   $("btnCompare").addEventListener("click", async () => {
     if (!slots.A || !slots.B) return;
-    const kaIdx = parseInt($("keyA").value, 10), kbIdx = parseInt($("keyB").value, 10);
-    if (isNaN(kaIdx) || isNaN(kbIdx)) { setCmpError("기준 컬럼을 선택해 주세요."); return; }
+    const keyPairs = getKeyPairs();
+    if (!keyPairs.length) { setCmpError("행 매칭 기준 컬럼을 선택해 주세요."); return; }
+    const colMap = getColMap();
+    if ([...colMap.keys()].filter((i) => !keyPairs.some((p) => p.a === i)).length === 0) {
+      setCmpError("비교할 열이 없습니다. ③ 열 매핑에서 비교할 열을 1개 이상 지정해 주세요."); return;
+    }
     // 수치 파라미터 안전 파싱(비정상 입력은 범위로 보정 후 입력창에 반영)
     const clampNum = (id, def, lo, hi) => {
       let v = parseFloat($(id).value);
@@ -5511,7 +5708,7 @@ window.__infoTooltip = InfoTooltip;
     try {
       setCmpProgress(20); setCmpStatus("두 파일의 행을 비교하고 있습니다...");
       await new Promise((r) => setTimeout(r, 0));
-      lastCompare = compareTables(slots.A.table, slots.B.table, kaIdx, kbIdx, opts);
+      lastCompare = compareTables(slots.A.table, slots.B.table, keyPairs, opts, colMap);
       setCmpProgress(90); setCmpStatus("결과를 정리하고 있습니다...");
       await new Promise((r) => setTimeout(r, 0));
       renderCompare(lastCompare);
@@ -5569,11 +5766,48 @@ window.__infoTooltip = InfoTooltip;
     renderCompareTable(result);
   }
 
+  /** 가로형 표의 셀 하나(비교 열 1개) HTML. 변경이면 '이전 → 이후', 아니면 값 그대로. */
+  function cmpCellHtml(rec, col, cellByCol) {
+    const c = cellByCol.get(col.name);
+    if (c) {
+      const anom = (c.anom && c.anom.length) || c.type === "missing";
+      let extra = "";
+      if (c.type === "number") {
+        extra = c.pct === null ? " (0에서 변경)" :
+          " (" + (c.pct >= 0 ? "+" : "-") + fmt(Math.round(Math.abs(c.pct) * 100) / 100) + "%" +
+          (c.anom && c.anom.length ? " · " + c.anom.join(", ") : "") + ")";
+      } else if (c.type === "missing") extra = " (결측값 변경)";
+      else if (c.type === "type") extra = " (타입 변경)";
+      const txt = (v) => Values.isMissing(v) ? "(결측)" : (typeof v === "number" ? fmt(v) : Values.cellText(v));
+      return '<td class="' + (anom ? "cmp-anom" : "cmp-diff") + '">' +
+        '<span class="cmp-old">' + esc(txt(c.a)) + "</span> → " +
+        '<span class="cmp-new">' + esc(txt(c.b)) + "</span>" +
+        '<span class="muted">' + esc(extra) + "</span></td>";
+    }
+    // 변경 없음: 상태에 따라 존재하는 쪽 값을 보여 준다
+    const t = rec.status === "추가" ? result_tB : result_tA;
+    const ri = rec.status === "추가" ? rec.bi : rec.ai;
+    const ci = rec.status === "추가" ? col.bi : col.ai;
+    if (ri == null || !t) return '<td class="muted">-</td>';
+    const v = t.rows[ri][ci];
+    return '<td class="cmp-same">' + (Values.isMissing(v) ? "" : esc(Values.cellText(v))) + "</td>";
+  }
+  let result_tA = null, result_tB = null;   // 렌더링 중 참조할 원본 표
+
   function renderCompareTable(result) {
     const filter = $("cmpFilter").value;
     const thead = $("cmpTable").querySelector("thead");
     const tbody = $("cmpTable").querySelector("tbody");
-    thead.innerHTML = "<tr><th>상태</th><th>기준값</th><th>변경 내용</th><th>태그</th></tr>";
+    result_tA = result.tA; result_tB = result.tB;
+    const cols = result.compareCols || [];
+    const keyCols = result.keyCols || [];
+    // 헤더: 상태 | 기준 컬럼(들) | 비교 열들 | 태그
+    thead.innerHTML = "<tr><th>상태</th>" +
+      keyCols.map((k) => "<th>" + esc(k.name) + " <span class='muted'>(기준)</span></th>").join("") +
+      cols.map((c) => "<th title=\"A: " + esc(c.name) + " ↔ B: " + esc(c.nameB) + "\">" + esc(c.name) +
+        (norm(c.name) !== norm(c.nameB) ? " <span class='muted'>↔ " + esc(c.nameB) + "</span>" : "") + "</th>").join("") +
+      "<th>태그</th></tr>";
+    const colspan = 2 + keyCols.length + cols.length;
     let html = "", shown = 0, matched = 0;
     for (const rec of result.records) {
       if (filter === "diff" && rec.status === "동일") continue;
@@ -5582,19 +5816,18 @@ window.__infoTooltip = InfoTooltip;
       matched++;
       if (shown >= PREVIEW_LIMIT) continue;
       shown++;
-      let chips = rec.cells.map(cellChipHtml).join(" ");
-      if (!chips && rec.snapshot)
-        chips = rec.snapshot.map(([c, v]) => '<span class="chg miss">' + esc(c) + ": " + esc(v) + "</span>").join(" ");
+      const cellByCol = new Map(rec.cells.map((c) => [c.col, c]));
+      const keyVals = String(rec.key).split("\u001F");
       const tagHtml = rec.tags.map((t) =>
         t === "이상 변동" ? '<span class="tag-anom">⚠ ' + esc(t) + "</span>" : esc(t)).join(", ");
       html += '<tr class="' + STATUS_ROW[rec.status] + '">' +
         '<td><span class="st-badge ' + STATUS_BADGE[rec.status] + '">' + rec.status + "</span></td>" +
-        "<td>" + esc(rec.key) + "</td>" +
-        "<td>" + (chips || '<span class="muted">-</span>') + "</td>" +
+        keyCols.map((k, i) => "<td>" + esc(keyVals[i] || "") + "</td>").join("") +
+        cols.map((c) => cmpCellHtml(rec, c, cellByCol)).join("") +
         "<td>" + (tagHtml || '<span class="muted">-</span>') + "</td></tr>";
     }
-    tbody.innerHTML = html || '<tr><td colspan="4" class="muted">표시할 행이 없습니다.</td></tr>';
-    $("cmpNote").textContent = "표시: " + shown + " / " + matched + " 행" +
+    tbody.innerHTML = html || '<tr><td colspan="' + colspan + '" class="muted">표시할 행이 없습니다.</td></tr>';
+    $("cmpNote").textContent = "표시: " + shown + " / " + matched + " 행 · 비교 열 " + cols.length + "개" +
       (matched > PREVIEW_LIMIT ? " (상위 " + PREVIEW_LIMIT + "행까지만 미리보기로 보여 드립니다)" : "");
   }
   $("cmpFilter").addEventListener("change", () => { if (lastCompare) renderCompareTable(lastCompare); });
@@ -5620,12 +5853,27 @@ window.__infoTooltip = InfoTooltip;
   $("btnCmpDownload").addEventListener("click", () => {
     if (!lastCompare) return;
     const SLOT = { "변경": 1, "추가": 2, "삭제": 3, "동일": 0 };
-    const cols = ["상태", "기준값", "변경 내용", "태그"];
+    // 가로형: 상태 | 기준 컬럼(들) | 비교 열마다 1칸(변경 시 '이전 → 이후') | 태그
+    const keyCols = lastCompare.keyCols || [], cmpCols = lastCompare.compareCols || [];
+    const tA = lastCompare.tA, tB = lastCompare.tB;
+    const cols = ["상태"].concat(keyCols.map((k) => k.name))
+      .concat(cmpCols.map((c) => norm(c.name) === norm(c.nameB) ? c.name : c.name + " \u2194 " + c.nameB))
+      .concat(["태그"]);
     const rows = [], slots = [];
     for (const rec of lastCompare.records) {
-      let detail = rec.cells.map(cellChangeText).join(" / ");
-      if (!detail && rec.snapshot) detail = rec.snapshot.map(([c, v]) => c + ": " + v).join(" / ");
-      rows.push([rec.status, rec.key, detail, rec.tags.join(", ")]);
+      const cellByCol = new Map(rec.cells.map((c) => [c.col, c]));
+      const keyVals = String(rec.key).split("\u001F");
+      const line = [rec.status].concat(keyCols.map((k, i) => keyVals[i] || ""));
+      for (const col of cmpCols) {
+        const c = cellByCol.get(col.name);
+        if (c) { line.push(cellChangeText(c).replace(col.name + ": ", "")); continue; }
+        const t = rec.status === "추가" ? tB : tA;
+        const ri = rec.status === "추가" ? rec.bi : rec.ai;
+        const ci = rec.status === "추가" ? col.bi : col.ai;
+        line.push(ri == null || !t ? "" : Values.cellText(t.rows[ri][ci]));
+      }
+      line.push(rec.tags.join(", "));
+      rows.push(line);
       slots.push(SLOT[rec.status] || 0);
     }
     const s = lastCompare.summary;
@@ -5642,7 +5890,7 @@ window.__infoTooltip = InfoTooltip;
   });
 
   // 테스트 편의를 위해 내부 기능 노출
-  window.__compare = { slots, inferKeys, compareTables, handleSlotFile, switchMode, nameScore };
+  window.__compare = { slots, inferKeys, compareTables, handleSlotFile, switchMode, nameScore, getKeyPairs, getColMap, autoColMap, posColMap, groupByKey };
 })();
 
 /* =====================================================================
