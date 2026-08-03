@@ -234,6 +234,13 @@
   .key-pair .kp-no{ flex:0 0 auto; font-size:12px; color:var(--muted); min-width:44px; }
   .key-pair select{ width:220px; }
   .key-pair .kp-del{ flex:0 0 auto; border:0; background:none; color:#b23c17; cursor:pointer; font-size:13px; padding:0 4px; }
+  /* 비교: 구분값(비교 행) 미리보기 칩 */
+  .kv-list{ display:flex; flex-wrap:wrap; gap:4px; margin-top:6px; max-height:120px; overflow-y:auto; }
+  .kv-chip{ display:inline-block; padding:1px 8px; border-radius:10px; font-size:11.5px;
+    background:#eef2f7; border:1px solid #dfe4ea; color:#1f2933; white-space:nowrap; }
+  .kv-chip.kv-a{ background:#FDECEA; border-color:#f3c4bf; }
+  .kv-chip.kv-b{ background:#E9F7EC; border-color:#bfe3c8; }
+  .kv-more{ align-self:center; font-size:11.5px; color:#8a97a5; }
   /* 비교: 열 매핑 표 */
   #colMapTable td, #colMapTable th{ white-space:nowrap; }
   #colMapTable select{ width:210px; }
@@ -633,13 +640,13 @@
 
     <!-- 비교 ② 행 매칭 기준(기준 컬럼 · 복합키 지원) -->
     <div class="panel">
-      <h2><span class="badge">2</span> 행 매칭 기준 (같은 행 찾기)</h2>
-      <p class="muted">두 파일에서 <b>같은 행</b>을 찾아낼 기준 컬럼을 고릅니다.
-        기준값이 같은 행끼리 짝지은 뒤, 아래 ③에서 매핑한 <b>나머지 열의 값을 1:1로 비교</b>합니다.
-        기준값이 중복되면 [기준 컬럼 추가]로 여러 열을 조합해 주세요.</p>
+      <h2><span class="badge">2</span> 구분 컬럼 선택 (구분값별 비교)</h2>
+      <p class="muted">비교의 <b>구분 컬럼</b>을 고릅니다. 선택하시면 그 컬럼의 <b>고유값 개수만큼 비교 행이 자동으로 생성</b>되고,
+        <b>같은 구분값끼리만</b>(예: 부산↔부산, 서울↔서울) 짝지어 아래 ③에서 매핑한 나머지 열의 값을 비교합니다.
+        값을 하나씩 지정하실 필요는 없습니다. 구분값이 여러 열의 조합일 때만 [구분 컬럼 추가]를 사용해 주세요.</p>
       <div id="keyPairs" class="key-pairs"></div>
       <div class="row" style="margin-top:8px;">
-        <button type="button" id="btnAddKey" class="secondary" disabled>＋ 기준 컬럼 추가</button>
+        <button type="button" id="btnAddKey" class="secondary" disabled>＋ 구분 컬럼 추가 (여러 열 조합)</button>
       </div>
       <div id="keyHint" class="note"></div>
       <div id="keyPreview" class="note"></div>
@@ -683,8 +690,8 @@
       <div class="row" style="margin-bottom:10px;">
         <label class="muted">표시 필터&nbsp;
           <select id="cmpFilter" aria-label="비교 결과 표시 필터">
-            <option value="diff" selected>동일 행 제외</option>
-            <option value="all">전체 보기</option>
+            <option value="diff">동일 행 제외</option>
+            <option value="all" selected>전체 보기</option>
             <option value="변경">변경만</option>
             <option value="추가">추가만</option>
             <option value="삭제">삭제만</option>
@@ -5358,23 +5365,41 @@ window.__infoTooltip = InfoTooltip;
       row.querySelector(".kp-no").textContent = i === 0 ? "기준" : "추가 " + i;
     });
   }
-  /** 현재 기준 컬럼으로 몇 행이 짝지어지는지 미리 보여 준다(비교 전 확인용). */
+  /** 구분 컬럼의 고유값을 읽어 '자동 생성될 비교 행' 목록을 미리 보여 준다.
+   *  (고유값 개수 = 비교 행 개수. 같은 구분값끼리만 짝지어진다는 것을 눈으로 확인시키는 용도) */
+  const KEY_CHIP_MAX = 40;
   function updateKeyPreview() {
     const pairs = getKeyPairs();
-    if (!pairs.length || !slots.A || !slots.B) { $("keyPreview").textContent = ""; return; }
+    const box = $("keyPreview");
+    if (!pairs.length || !slots.A || !slots.B) { box.textContent = ""; return; }
     const ga = groupByKey(slots.A.table, pairs.map((p) => p.a));
     const gb = groupByKey(slots.B.table, pairs.map((p) => p.b));
-    let matched = 0, onlyA = 0, dup = 0;
-    for (const [k, arr] of ga.groups) {
-      const arrB = gb.groups.get(k);
-      if (arrB) { matched += Math.min(arr.length, arrB.length); if (arr.length > 1 || arrB.length > 1) dup++; }
-      else onlyA += arr.length;
+    // 구분값 합집합(A 순서 우선) → 각 값이 비교 행 1개가 된다
+    const keys = [];
+    for (const k of ga.groups.keys()) keys.push(k);
+    for (const k of gb.groups.keys()) if (!ga.groups.has(k)) keys.push(k);
+    let both = 0, onlyA = 0, onlyB = 0, dup = 0, rows = 0;
+    const chips = [];
+    for (const k of keys) {
+      const a = ga.groups.get(k), b = gb.groups.get(k);
+      const label = keyLabel(k);
+      let cls = "kv-both", note = "";
+      if (a && b) {
+        both++; rows += Math.min(a.length, b.length) + Math.abs(a.length - b.length);
+        if (a.length > 1 || b.length > 1) { dup++; note = " (A" + a.length + "행·B" + b.length + "행 · 순서대로)"; }
+      } else if (a) { onlyA++; rows += a.length; cls = "kv-a"; note = " (A에만)"; }
+      else { onlyB++; rows += b.length; cls = "kv-b"; note = " (B에만)"; }
+      if (chips.length < KEY_CHIP_MAX)
+        chips.push('<span class="kv-chip ' + cls + '">' + esc(label) +
+          (a && b ? " \u2194 " + esc(label) : "") + esc(note) + "</span>");
     }
-    let onlyB = 0;
-    for (const [k, arr] of gb.groups) if (!ga.groups.has(k)) onlyB += arr.length;
-    $("keyPreview").innerHTML = "행 매칭 미리보기: <b>" + matched + "행</b> 짝지어짐 · A에만 " + onlyA +
-      "행 · B에만 " + onlyB + "행" + (dup ? " · <b>기준값 중복 " + dup + "건</b>(기준 컬럼을 추가하시면 정확해집니다)" : "") +
-      (ga.emptyKey || gb.emptyKey ? " · 기준값 빈 행 제외 A " + ga.emptyKey + "/B " + gb.emptyKey : "");
+    const more = keys.length > KEY_CHIP_MAX ? '<span class="kv-more">외 ' + (keys.length - KEY_CHIP_MAX) + "개</span>" : "";
+    box.innerHTML =
+      "구분값 <b>" + keys.length + "개</b> \u2192 비교 행 <b>" + rows + "개</b>가 자동으로 만들어집니다. " +
+      '<span class="muted">(양쪽 모두 ' + both + " · A에만 " + onlyA + " · B에만 " + onlyB +
+      (dup ? " · 중복 구분값 " + dup + "개는 순서대로 짝지음" : "") +
+      (ga.emptyKey || gb.emptyKey ? " · 구분값 빈 행 제외 A " + ga.emptyKey + "/B " + gb.emptyKey : "") + ")</span>" +
+      '<div class="kv-list">' + chips.join("") + more + "</div>";
   }
 
   /* ---------- 열 매핑 UI ---------- */
