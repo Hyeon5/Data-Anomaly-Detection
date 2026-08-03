@@ -640,21 +640,16 @@
 
     <!-- 비교 ② 행 매칭 기준(기준 컬럼 · 복합키 지원) -->
     <div class="panel">
-      <h2><span class="badge">2</span> <span id="cmpKeyTitle">구분 컬럼 선택 (구분값별 비교)</span></h2>
-      <p class="muted" id="cmpKeyDesc">비교의 <b>구분 컬럼</b>을 고릅니다. 선택하시면 그 컬럼의 <b>고유값 개수만큼 비교 행이 자동으로 생성</b>되고,
-        <b>같은 구분값끼리만</b>(예: 부산↔부산, 서울↔서울) 짝지어 아래 ③에서 매핑한 나머지 열의 값을 비교합니다.
-        값을 하나씩 지정하실 필요는 없습니다. 구분값이 여러 열의 조합일 때만 [구분 컬럼 추가]를 사용해 주세요.</p>
+      <h2><span class="badge">2</span> <span id="cmpKeyTitle">구분 컬럼 선택</span></h2>
       <div class="row cmp-axis" style="margin-bottom:10px;">
         <span class="muted">비교 축</span>
-        <label><input type="radio" name="cmpAxis" value="row" checked> <b>행 기준</b> — <b>행</b>을 매칭한 뒤 그 행의 <b>열</b> 값들을 비교</label>
-        <label><input type="radio" name="cmpAxis" value="col"> <b>열 기준</b> — <b>열</b>을 매칭한 뒤 그 열의 <b>행</b> 값들을 비교</label>
+        <label title="행을 매칭한 뒤 그 행의 열 값들을 비교합니다."><input type="radio" name="cmpAxis" value="row" checked> <b>행 기준</b></label>
+        <label title="열을 매칭한 뒤 그 열의 행 값들을 비교합니다."><input type="radio" name="cmpAxis" value="col"> <b>열 기준</b></label>
       </div>
-      <div id="axisHint" class="note"></div>
       <div id="keyPairs" class="key-pairs"></div>
       <div class="row" style="margin-top:8px;">
-        <button type="button" id="btnAddKey" class="secondary" disabled>＋ 구분 컬럼 추가 (여러 열 조합)</button>
+        <button type="button" id="btnAddKey" class="secondary" disabled>＋ 구분 컬럼 추가</button>
       </div>
-      <div id="keyHint" class="note"></div>
       <div id="keyPreview" class="note"></div>
     </div>
 
@@ -5386,33 +5381,23 @@ window.__infoTooltip = InfoTooltip;
 
   const AXIS_TEXT = {
     row: {
-      keyTitle: "구분 컬럼 선택 (구분값별 비교)",
-      keyDesc: "비교의 <b>구분 컬럼</b>을 고릅니다. 선택하시면 그 컬럼의 <b>고유값 개수만큼 비교 행이 자동으로 생성</b>되고, " +
-        "<b>같은 구분값끼리만</b>(예: 부산\u2194부산, 서울\u2194서울) 짝지어 아래 \u2462에서 매핑한 나머지 열의 값을 비교합니다. " +
-        "값을 하나씩 지정하실 필요는 없습니다. 구분값이 여러 열의 조합일 때만 [구분 컬럼 추가]를 사용해 주세요.",
+      keyTitle: "구분 컬럼 선택",
+      keyRole: "구분 컬럼",
       mapTitle: "열 매핑 (비교할 열 짝짓기)",
       mapDesc: "A 파일의 각 열을 B 파일의 어떤 열과 비교할지 정합니다. " +
         "컬럼명이 달라도(예: <b>2023년 매출 \u2194 2024년 매출</b>) 여기서 직접 지정하시면 비교됩니다. " +
         "비교에서 빼려면 <b>(비교 안 함)</b> 을 선택해 주세요.",
-      hint: "<b>세로형 표</b>(각 행이 하나의 대상)에 적합합니다. " +
-        "예) A열 <b>지역</b>이 같은 행끼리 짝지어 B열 <b>전분기</b> 값을 비교 \u2192 지역 수만큼 비교 행이 생깁니다.",
-      addKey: "＋ 구분 컬럼 추가 (여러 열 조합)",
+      addKey: "＋ 구분 컬럼 추가",
       unit: "행",
     },
     col: {
-      keyTitle: "행 라벨 컬럼 선택 (비교 항목 이름)",
-      keyDesc: "열 기준 비교에서는 <b>열이 매칭 단위</b>이고, 매칭된 열의 <b>행 값들</b>이 비교 대상입니다. " +
-        "여기서는 각 행을 무엇으로 부를지(<b>행 라벨</b>)를 담은 컬럼만 고르시면 됩니다. " +
-        "<b>같은 라벨의 행끼리만</b>(예: 매출\u2194매출) 짝지어 비교하며, 이 컬럼 자체는 비교 대상에서 제외됩니다.",
+      keyTitle: "행 라벨 컬럼 선택",
+      keyRole: "행 라벨 컬럼",
       mapTitle: "열 매칭 (비교 단위 짝짓기)",
       mapDesc: "A 파일의 각 열을 B 파일의 어떤 열과 <b>같은 열</b>로 볼지 정합니다. " +
         "열 이름이 달라도(예: <b>2023년 \u2194 2024년</b>) 여기서 직접 지정하시면 매칭됩니다. " +
         "매칭에서 빼려면 <b>(비교 안 함)</b> 을 선택해 주세요.",
-      hint: "표를 전치하지 않습니다. A\u00b7B의 <b>열을 짝지어(\u2462)</b> 같은 열로 보고, " +
-        "그 열 안의 <b>행 값들</b>을 행 라벨 기준으로 하나씩 비교합니다. 결과표의 매칭 기준은 <b>열 이름</b>으로 표시됩니다. " +
-        "<b>가로형(크로스탭) 표</b>, 즉 <b>열 머리글이 비교 대상</b>(예: 부산\u00b7서울\u00b7대구)인 표에 적합합니다. " +
-        "지역이 <b>행</b>에 있는 세로형 표라면 <b>행 기준</b>을 선택해 주세요.",
-      addKey: "＋ 행 라벨 컬럼 추가 (여러 열 조합)",
+      addKey: "＋ 행 라벨 컬럼 추가",
       unit: "열",
     },
   };
@@ -5423,11 +5408,9 @@ window.__infoTooltip = InfoTooltip;
     cmpAxis = (document.querySelector('input[name="cmpAxis"]:checked') || {}).value || "row";
     const t = axisText();
     $("cmpKeyTitle").textContent = t.keyTitle;
-    $("cmpKeyDesc").innerHTML = t.keyDesc;
     $("cmpMapTitle").textContent = t.mapTitle;
     $("cmpMapDesc").innerHTML = t.mapDesc;
     $("btnAddKey").textContent = t.addKey;
-    $("axisHint").innerHTML = t.hint;
     $("cmpFilterDiff").textContent = "동일 " + t.unit + " 제외";
   }
 
@@ -5465,43 +5448,23 @@ window.__infoTooltip = InfoTooltip;
       row.querySelector(".kp-no").textContent = i === 0 ? "기준" : "추가 " + i;
     });
   }
-  /** 매칭 기준 컬럼의 고유값을 읽어 '자동으로 만들어질 짝' 목록을 미리 보여 준다.
-   *  행 기준: 구분값 1개 = 비교 행 1개 / 열 기준: 행 라벨 1개 = 각 열에서 비교할 값 1개 */
-  const KEY_CHIP_MAX = 40;
+  /** 선택한 기준 컬럼으로 몇 개가 비교되는지 숫자만 짧게 보여 준다(설명 없음). */
   function updateKeyPreview() {
     const pairs = getKeyPairs();
     const box = $("keyPreview");
     if (!pairs.length || !slots.A || !slots.B) { box.textContent = ""; return; }
     const ga = groupByKey(tblA(), pairs.map((p) => p.a));
     const gb = groupByKey(tblB(), pairs.map((p) => p.b));
-    // 구분값 합집합(A 순서 우선) → 각 값이 비교 행 1개가 된다
-    const keys = [];
-    for (const k of ga.groups.keys()) keys.push(k);
-    for (const k of gb.groups.keys()) if (!ga.groups.has(k)) keys.push(k);
-    let both = 0, onlyA = 0, onlyB = 0, dup = 0, rows = 0;
-    const chips = [];
+    const keys = new Set([...ga.groups.keys(), ...gb.groups.keys()]);
+    let both = 0, rows = 0;
     for (const k of keys) {
       const a = ga.groups.get(k), b = gb.groups.get(k);
-      const label = keyLabel(k);
-      let cls = "kv-both", note = "";
-      if (a && b) {
-        both++; rows += Math.min(a.length, b.length) + Math.abs(a.length - b.length);
-        if (a.length > 1 || b.length > 1) { dup++; note = " (A" + a.length + "행·B" + b.length + "행 · 순서대로)"; }
-      } else if (a) { onlyA++; rows += a.length; cls = "kv-a"; note = " (A에만)"; }
-      else { onlyB++; rows += b.length; cls = "kv-b"; note = " (B에만)"; }
-      if (chips.length < KEY_CHIP_MAX)
-        chips.push('<span class="kv-chip ' + cls + '">' + esc(label) +
-          (a && b ? " \u2194 " + esc(label) : "") + esc(note) + "</span>");
+      if (a && b) { both++; rows += Math.max(a.length, b.length); }
+      else rows += (a || b).length;
     }
-    const more = keys.length > KEY_CHIP_MAX ? '<span class="kv-more">외 ' + (keys.length - KEY_CHIP_MAX) + "개</span>" : "";
-    const head = isColAxis()
-      ? "행 라벨 <b>" + keys.length + "개</b> \u2192 매칭된 열마다 <b>" + both + "개</b> 값을 짝지어 비교합니다. "
-      : "구분값 <b>" + keys.length + "개</b> \u2192 비교 행 <b>" + rows + "개</b>가 자동으로 만들어집니다. ";
-    box.innerHTML = head +
-      '<span class="muted">(양쪽 모두 ' + both + " · A에만 " + onlyA + " · B에만 " + onlyB +
-      (dup ? " · 중복 " + (isColAxis() ? "행 라벨 " : "구분값 ") + dup + "개는 순서대로 짝지음" : "") +
-      (ga.emptyKey || gb.emptyKey ? " · " + (isColAxis() ? "행 라벨" : "구분값") + " 빈 행 제외 A " + ga.emptyKey + "/B " + gb.emptyKey : "") + ")</span>" +
-      '<div class="kv-list">' + chips.join("") + more + "</div>";
+    box.innerHTML = isColAxis()
+      ? "행 라벨 <b>" + keys.size + "</b> \u00b7 공통 <b>" + both + "</b>"
+      : "구분값 <b>" + keys.size + "</b> \u2192 비교 행 <b>" + rows + "</b>";
   }
 
   /* ---------- 열 매핑 UI ---------- */
@@ -5586,20 +5549,14 @@ window.__infoTooltip = InfoTooltip;
     $("colMapTable").querySelector("tbody").innerHTML = "";
     $("mapSummary").textContent = "";
     if (!ready) {
-      $("keyHint").textContent = ""; $("keyPreview").textContent = "";
+      $("keyPreview").textContent = "";
       setCmpStatus("파일 A와 B를 모두 올려 주시면 비교를 시작할 수 있습니다.");
       setCmpProgress(0);
       return;
     }
-    const roleName = isColAxis() ? "행 라벨 컬럼" : "구분 컬럼";
+    const roleName = axisText().keyRole;
     const hit = inferKeys(tA, tB);
     addKeyPairRow(hit ? hit.i : 0, hit ? hit.j : 0);
-    if (hit) {
-      $("keyHint").textContent = "자동 추천: A의 '" + tA.columns[hit.i] +
-        "' \u2194 B의 '" + tB.columns[hit.j] + "' 컬럼을 " + roleName + "으로 사용합니다. 직접 바꾸실 수 있습니다.";
-    } else {
-      $("keyHint").textContent = roleName + "을 자동으로 찾지 못했습니다. 두 파일에서 같은 대상을 가리키는 컬럼을 직접 선택해 주세요.";
-    }
     // 열 매핑: 이름으로 자동 → 짝지어진 열이 하나도 없으면 순서대로 매핑으로 폴백
     const kp = getKeyPairs(), keySetAuto = new Set(kp.map((p) => p.a));
     let map0 = autoColMap(tA, tB, kp);
@@ -5608,9 +5565,8 @@ window.__infoTooltip = InfoTooltip;
       map0 = posColMap(tA, tB, kp); fellBack = true;
     }
     renderColMap(map0);
-    if (fellBack) {
-      $("keyHint").innerHTML += "<br><b>\uCEEC\uB7FC\uBA85\uC774 \uC11C\uB85C \uB2EC\uB77C(\uC608: 2023\uB144 \u2194 2024\uB144) \uC5F4\uC744 \uC21C\uC11C\uB300\uB85C \uB9E4\uD551\uD588\uC2B5\uB2C8\uB2E4.</b> \u2462 \uC5F4 \uB9E4\uD551\uC5D0\uC11C \uD655\uC778\u00B7\uC218\uC815\uD574 \uC8FC\uC138\uC694.";
-    }
+    // 이름이 달라 순서대로 매핑한 경우는 \u2462 요약에만 짧게 덧붙인다(\u2461 은 설명 없이 유지).
+    if (fellBack) $("mapSummary").textContent += " \u00b7 이름이 달라 순서대로 매핑함";
     updateKeyPreview();
     setCmpStatus(roleName + "과 열 매핑을 확인하신 뒤 [비교 시작] 버튼을 눌러 주세요.");
   }
