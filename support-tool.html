@@ -228,19 +228,6 @@
   select{ border:1px solid var(--line); border-radius:6px; padding:7px 9px; font-size:13px; background:#fff; }
   /* 비교 결과 행/셀 강조 */
   #cmpTable td{ white-space:normal; }
-  /* 비교: 기준 컬럼(복합키) 행 */
-  .key-pairs{ display:flex; flex-direction:column; gap:6px; }
-  .key-pair{ display:flex; align-items:center; gap:8px; }
-  .key-pair .kp-no{ flex:0 0 auto; font-size:12px; color:var(--muted); min-width:44px; }
-  .key-pair select{ width:220px; }
-  .key-pair .kp-del{ flex:0 0 auto; border:0; background:none; color:#b23c17; cursor:pointer; font-size:13px; padding:0 4px; }
-  /* 비교: 구분값(비교 행) 미리보기 칩 */
-  .kv-list{ display:flex; flex-wrap:wrap; gap:4px; margin-top:6px; max-height:120px; overflow-y:auto; }
-  .kv-chip{ display:inline-block; padding:1px 8px; border-radius:10px; font-size:11.5px;
-    background:#eef2f7; border:1px solid #dfe4ea; color:#1f2933; white-space:nowrap; }
-  .kv-chip.kv-a{ background:#FDECEA; border-color:#f3c4bf; }
-  .kv-chip.kv-b{ background:#E9F7EC; border-color:#bfe3c8; }
-  .kv-more{ align-self:center; font-size:11.5px; color:#8a97a5; }
   /* 비교: 열 매핑 표 */
   #colMapTable td, #colMapTable th{ white-space:nowrap; }
   #colMapTable select{ width:210px; }
@@ -638,25 +625,23 @@
       <div id="cmpFileError" class="dz-error hidden" role="alert" aria-live="assertive"></div>
     </div>
 
-    <!-- 비교 ② 행 매칭 기준(기준 컬럼 · 복합키 지원) -->
+    <!-- 비교 ② 기준 컬럼 -->
     <div class="panel">
-      <h2><span class="badge">2</span> <span id="cmpKeyTitle">구분 컬럼 선택</span></h2>
-      <div class="row cmp-axis" style="margin-bottom:10px;">
-        <span class="muted">비교 축</span>
-        <label title="행을 매칭한 뒤 그 행의 열 값들을 비교합니다."><input type="radio" name="cmpAxis" value="row" checked> <b>행 기준</b></label>
-        <label title="열을 매칭한 뒤 그 열의 행 값들을 비교합니다."><input type="radio" name="cmpAxis" value="col"> <b>열 기준</b></label>
+      <h2><span class="badge">2</span> 기준 컬럼 선택 (행 매칭 기준)</h2>
+      <p class="muted">두 파일의 행을 짝지어 줄 기준 컬럼(예: 관리번호, 업체명)을 선택해 주세요.
+        두 파일을 모두 올리시면 가장 알맞은 컬럼을 자동으로 추천해 드립니다.</p>
+      <div class="row" style="display:flex; justify-content:center; align-items:center";>
+        <label class="muted">파일 A&nbsp;<select id="keyA" style="width:220px;" disabled aria-label="파일 A 기준 컬럼"></select></label>
+        <span aria-hidden="true" style="font-weight:700;">↔</span>
+        <label class="muted">파일 B&nbsp;<select id="keyB" style="width:220px;" disabled aria-label="파일 B 기준 컬럼"></select></label>
       </div>
-      <div id="keyPairs" class="key-pairs"></div>
-      <div class="row" style="margin-top:8px;">
-        <button type="button" id="btnAddKey" class="secondary" disabled>＋ 구분 컬럼 추가</button>
-      </div>
-      <div id="keyPreview" class="note"></div>
+      <div id="keyHint" class="note"></div>
     </div>
 
     <!-- 비교 ③ 열 매핑 -->
     <div class="panel coll" id="colMapPanel">
-      <h2><span><span class="badge">3</span> <span id="cmpMapTitle">열 매핑 (비교할 열 짝짓기)</span></span><span class="coll-caret" aria-hidden="true">▼</span></h2>
-      <p class="muted" id="cmpMapDesc">A 파일의 각 열을 B 파일의 어떤 열과 비교할지 정합니다.
+      <h2><span><span class="badge">3</span> 열 매핑 (비교할 열 짝짓기)</span><span class="coll-caret" aria-hidden="true">▼</span></h2>
+      <p class="muted">A 파일의 각 열을 B 파일의 어떤 열과 비교할지 정합니다.
         컬럼명이 달라도(예: <b>2023년 매출 ↔ 2024년 매출</b>) 여기서 직접 지정하시면 비교됩니다.
         비교에서 빼려면 <b>(비교 안 함)</b> 을 선택해 주세요.</p>
       <div class="row" style="margin-bottom:8px;">
@@ -691,7 +676,7 @@
       <div class="row" style="margin-bottom:10px;">
         <label class="muted">표시 필터&nbsp;
           <select id="cmpFilter" aria-label="비교 결과 표시 필터">
-            <option value="diff" id="cmpFilterDiff">동일 행 제외</option>
+            <option value="diff">동일 행 제외</option>
             <option value="all" selected>전체 보기</option>
             <option value="변경">변경만</option>
             <option value="추가">추가만</option>
@@ -5368,103 +5353,15 @@ window.__infoTooltip = InfoTooltip;
     sel.disabled = false;
   }
 
-  /* ---------- 비교 축(행 기준 / 열 기준) ---------- */
-  // 표(데이터 구조)는 그대로 두고, '무엇을 매칭 단위로 볼 것인지'만 바꾼다.
-  //   행 기준 : 행을 매칭(구분 컬럼 값) → 매칭된 행끼리 '열' 값들을 비교
-  //   열 기준 : 열을 매칭(열 이름)      → 매칭된 열끼리 '행' 값들을 비교
-  // 어느 쪽이든 원본 tA/tB 를 그대로 읽으며, 읽는 축(rows[r][c] 의 r·c 역할)만 반대가 된다.
-  let cmpAxis = "row";                       // row | col
-  const isColAxis = () => cmpAxis === "col";
-  /** 현재 축의 A/B 원본 표(전치하지 않는다). */
+  /** A/B 원본 표. */
   const tblA = () => (slots.A && slots.A.table) || null;
   const tblB = () => (slots.B && slots.B.table) || null;
 
-  const AXIS_TEXT = {
-    row: {
-      keyTitle: "구분 컬럼 선택",
-      keyRole: "구분 컬럼",
-      mapTitle: "열 매핑 (비교할 열 짝짓기)",
-      mapDesc: "A 파일의 각 열을 B 파일의 어떤 열과 비교할지 정합니다. " +
-        "컬럼명이 달라도(예: <b>2023년 매출 \u2194 2024년 매출</b>) 여기서 직접 지정하시면 비교됩니다. " +
-        "비교에서 빼려면 <b>(비교 안 함)</b> 을 선택해 주세요.",
-      addKey: "＋ 구분 컬럼 추가",
-      unit: "행",
-    },
-    col: {
-      keyTitle: "행 라벨 컬럼 선택",
-      keyRole: "행 라벨 컬럼",
-      mapTitle: "열 매칭 (비교 단위 짝짓기)",
-      mapDesc: "A 파일의 각 열을 B 파일의 어떤 열과 <b>같은 열</b>로 볼지 정합니다. " +
-        "열 이름이 달라도(예: <b>2023년 \u2194 2024년</b>) 여기서 직접 지정하시면 매칭됩니다. " +
-        "매칭에서 빼려면 <b>(비교 안 함)</b> 을 선택해 주세요.",
-      addKey: "＋ 행 라벨 컬럼 추가",
-      unit: "열",
-    },
-  };
-  const axisText = () => AXIS_TEXT[cmpAxis];
-
-  /** 비교 축이 바뀔 때 화면 문구를 그 축에 맞게 바꾼다. */
-  function applyAxisLabels() {
-    cmpAxis = (document.querySelector('input[name="cmpAxis"]:checked') || {}).value || "row";
-    const t = axisText();
-    $("cmpKeyTitle").textContent = t.keyTitle;
-    $("cmpMapTitle").textContent = t.mapTitle;
-    $("cmpMapDesc").innerHTML = t.mapDesc;
-    $("btnAddKey").textContent = t.addKey;
-    $("cmpFilterDiff").textContent = "동일 " + t.unit + " 제외";
-  }
-
-  /* ---------- 기준 컬럼(복합키) UI ---------- */
-  /** 현재 화면의 기준 컬럼 쌍 목록 [{a,b}] 을 읽는다. */
+  /* ---------- 기준 컬럼 UI ---------- */
+  /** 화면의 기준 컬럼(행 매칭 기준) 쌍을 읽는다. 내부 비교 로직이 배열을 받으므로 [{a,b}] 형태로 돌려준다. */
   function getKeyPairs() {
-    return [...document.querySelectorAll("#keyPairs .key-pair")].map((row) => ({
-      a: parseInt(row.querySelector(".kp-a").value, 10),
-      b: parseInt(row.querySelector(".kp-b").value, 10),
-    })).filter((p) => Number.isFinite(p.a) && Number.isFinite(p.b));
-  }
-  /** 기준 컬럼 쌍 한 줄을 그린다. 첫 줄은 id(keyA/keyB)를 유지한다. */
-  function addKeyPairRow(ai, bi) {
-    const box = $("keyPairs"), no = box.children.length;
-    const row = document.createElement("div");
-    row.className = "key-pair";
-    const idA = no === 0 ? ' id="keyA"' : "", idB = no === 0 ? ' id="keyB"' : "";
-    row.innerHTML = '<span class="kp-no">' + (no === 0 ? "기준" : "추가 " + no) + "</span>" +
-      '<label class="muted">A&nbsp;<select class="kp-a"' + idA + ' aria-label="파일 A 기준 컬럼"></select></label>' +
-      '<span aria-hidden="true" style="font-weight:700;">↔</span>' +
-      '<label class="muted">B&nbsp;<select class="kp-b"' + idB + ' aria-label="파일 B 기준 컬럼"></select></label>' +
-      (no === 0 ? "" : '<button type="button" class="kp-del" title="이 기준 컬럼 제거">✕</button>');
-    box.appendChild(row);
-    fillSelect(row.querySelector(".kp-a"), tblA().columns, ai);
-    fillSelect(row.querySelector(".kp-b"), tblB().columns, bi);
-    // 기준 컬럼이 바뀌면 열 매핑 표도 다시 그린다(기준 컬럼은 비교 대상에서 잠김)
-    row.querySelectorAll("select").forEach((s) => s.addEventListener("change", () => {
-      renderColMap(getColMap()); updateKeyPreview();
-    }));
-    const del = row.querySelector(".kp-del");
-    if (del) del.addEventListener("click", () => { row.remove(); renumberKeyPairs(); renderColMap(getColMap()); updateKeyPreview(); });
-  }
-  function renumberKeyPairs() {
-    [...document.querySelectorAll("#keyPairs .key-pair")].forEach((row, i) => {
-      row.querySelector(".kp-no").textContent = i === 0 ? "기준" : "추가 " + i;
-    });
-  }
-  /** 선택한 기준 컬럼으로 몇 개가 비교되는지 숫자만 짧게 보여 준다(설명 없음). */
-  function updateKeyPreview() {
-    const pairs = getKeyPairs();
-    const box = $("keyPreview");
-    if (!pairs.length || !slots.A || !slots.B) { box.textContent = ""; return; }
-    const ga = groupByKey(tblA(), pairs.map((p) => p.a));
-    const gb = groupByKey(tblB(), pairs.map((p) => p.b));
-    const keys = new Set([...ga.groups.keys(), ...gb.groups.keys()]);
-    let both = 0, rows = 0;
-    for (const k of keys) {
-      const a = ga.groups.get(k), b = gb.groups.get(k);
-      if (a && b) { both++; rows += Math.max(a.length, b.length); }
-      else rows += (a || b).length;
-    }
-    box.innerHTML = isColAxis()
-      ? "행 라벨 <b>" + keys.size + "</b> \u00b7 공통 <b>" + both + "</b>"
-      : "구분값 <b>" + keys.size + "</b> \u2192 비교 행 <b>" + rows + "</b>";
+    const a = parseInt($("keyA").value, 10), b = parseInt($("keyB").value, 10);
+    return Number.isFinite(a) && Number.isFinite(b) ? [{ a, b }] : [];
   }
 
   /* ---------- 열 매핑 UI ---------- */
@@ -5493,23 +5390,20 @@ window.__infoTooltip = InfoTooltip;
     tA.columns.forEach((c, i) => { if (map.has(i)) return; if (k < restB.length) map.set(i, restB[k++]); });
     return map;
   }
-  /** 열 매핑 표를 그린다. sel 값 ""=비교 안 함
-   *  행 기준: A열 \u2194 B열 = '비교할 열' / 열 기준: A열 \u2194 B열 = '매칭할 비교 단위' */
+  /** 열 매핑 표를 그린다. sel 값 ""=비교 안 함 */
   function renderColMap(map) {
     const tA = tblA(), tB = tblB();
-    const byCol = isColAxis();
     const keySet = new Set(getKeyPairs().map((p) => p.a));
     const thead = $("colMapTable").querySelector("thead");
     const tbody = $("colMapTable").querySelector("tbody");
-    thead.innerHTML = "<tr><th>A 파일 열</th><th>" +
-      (byCol ? "매칭할 열 (B 파일 열)" : "비교 대상 (B 파일 열)") + "</th><th>구분</th></tr>";
+    thead.innerHTML = "<tr><th>A 파일 열</th><th>비교 대상 (B 파일 열)</th><th>구분</th></tr>";
     tbody.innerHTML = tA.columns.map((c, i) => {
       const isKey = keySet.has(i);
       const bi = map.has(i) ? map.get(i) : "";
       const opts = ['<option value="">(비교 안 함)</option>'].concat(
         tB.columns.map((cb, j) => '<option value="' + j + '"' + (j === bi ? " selected" : "") + ">" + esc(cb) + "</option>")
       ).join("");
-      const state = isKey ? '<span class="map-ok">' + (byCol ? "행 라벨 컬럼(비교 제외)" : "행 매칭 기준") + "</span>"
+      const state = isKey ? '<span class="map-ok">행 매칭 기준</span>'
         : (bi === "" ? '<span class="map-off">비교 안 함</span>'
           : (norm(tA.columns[i]) === norm(tB.columns[bi]) ? '<span class="map-ok">이름 일치</span>'
             : '<span class="map-warn">이름 다름</span>'));
@@ -5520,8 +5414,7 @@ window.__infoTooltip = InfoTooltip;
     tbody.querySelectorAll(".cm-b").forEach((s) => s.addEventListener("change", () => renderColMap(getColMap())));
     const mapped = [...map.keys()].filter((i) => !keySet.has(i)).length;
     const onlyB = tB.columns.length - new Set([...map.values()]).size;
-    $("mapSummary").textContent = (byCol ? "매칭 열 " : "비교 열 ") + mapped + "개" +
-      (onlyB > 0 ? " · B에만 있는 열 " + onlyB + "개(" + (byCol ? "추가로 표시" : "제외") + ")" : "");
+    $("mapSummary").textContent = "비교 열 " + mapped + "개" + (onlyB > 0 ? " · B에만 있는 열 " + onlyB + "개(제외)" : "");
   }
   /** 화면의 열 매핑 표를 Map(aIdx -> bIdx) 으로 읽는다(기준 컬럼 포함). */
   function getColMap() {
@@ -5538,25 +5431,30 @@ window.__infoTooltip = InfoTooltip;
   /** 두 슬롯 상태가 바뀔 때: 키 후보 갱신 + 버튼 활성화. */
   function afterSlotsChanged() {
     // 두 슬롯 모두 로드되고 선택 시트에 컬럼이 있어야 비교 가능
-    applyAxisLabels();
     const tA = tblA(), tB = tblB();
     const ready = !!(tA && tA.columns.length && tB && tB.columns.length);
     $("btnCompare").disabled = !ready;
-    $("btnAddKey").disabled = !ready;
     $("btnMapAuto").disabled = !ready; $("btnMapByPos").disabled = !ready;
-    $("keyPairs").innerHTML = "";
     $("colMapTable").querySelector("thead").innerHTML = "";
     $("colMapTable").querySelector("tbody").innerHTML = "";
     $("mapSummary").textContent = "";
     if (!ready) {
-      $("keyPreview").textContent = "";
+      $("keyA").innerHTML = ""; $("keyB").innerHTML = "";
+      $("keyA").disabled = true; $("keyB").disabled = true;
+      $("keyHint").textContent = "";
       setCmpStatus("파일 A와 B를 모두 올려 주시면 비교를 시작할 수 있습니다.");
       setCmpProgress(0);
       return;
     }
-    const roleName = axisText().keyRole;
     const hit = inferKeys(tA, tB);
-    addKeyPairRow(hit ? hit.i : 0, hit ? hit.j : 0);
+    fillSelect($("keyA"), tA.columns, hit ? hit.i : 0);
+    fillSelect($("keyB"), tB.columns, hit ? hit.j : 0);
+    if (hit) {
+      $("keyHint").textContent = "자동 추천: A의 '" + tA.columns[hit.i] +
+        "' \u2194 B의 '" + tB.columns[hit.j] + "' 컬럼을 기준으로 행을 짝짓습니다. 직접 바꾸실 수 있습니다.";
+    } else {
+      $("keyHint").textContent = "기준 컬럼을 자동으로 찾지 못했습니다. 두 파일에서 같은 대상을 가리키는 컬럼을 직접 선택해 주세요.";
+    }
     // 열 매핑: 이름으로 자동 → 짝지어진 열이 하나도 없으면 순서대로 매핑으로 폴백
     const kp = getKeyPairs(), keySetAuto = new Set(kp.map((p) => p.a));
     let map0 = autoColMap(tA, tB, kp);
@@ -5565,18 +5463,12 @@ window.__infoTooltip = InfoTooltip;
       map0 = posColMap(tA, tB, kp); fellBack = true;
     }
     renderColMap(map0);
-    // 이름이 달라 순서대로 매핑한 경우는 \u2462 요약에만 짧게 덧붙인다(\u2461 은 설명 없이 유지).
     if (fellBack) $("mapSummary").textContent += " \u00b7 이름이 달라 순서대로 매핑함";
-    updateKeyPreview();
-    setCmpStatus(roleName + "과 열 매핑을 확인하신 뒤 [비교 시작] 버튼을 눌러 주세요.");
+    setCmpStatus("기준 컬럼과 열 매핑을 확인하신 뒤 [비교 시작] 버튼을 눌러 주세요.");
   }
-  document.querySelectorAll('input[name="cmpAxis"]').forEach((r) =>
-    r.addEventListener("change", () => { afterSlotsChanged(); }));
-  $("btnAddKey").addEventListener("click", () => {
-    if (!slots.A || !slots.B) return;
-    addKeyPairRow(0, 0); renumberKeyPairs();
-    renderColMap(getColMap()); updateKeyPreview();
-  });
+  // 기준 컬럼이 바뀌면 열 매핑 표도 다시 그린다(기준 컬럼은 비교 대상에서 잠김)
+  ["keyA", "keyB"].forEach((id) =>
+    $(id).addEventListener("change", () => { if (slots.A && slots.B) renderColMap(getColMap()); }));
   $("btnMapAuto").addEventListener("click", () => renderColMap(autoColMap(tblA(), tblB(), getKeyPairs())));
   $("btnMapByPos").addEventListener("click", () => renderColMap(posColMap(tblA(), tblB(), getKeyPairs())));
 
@@ -5667,11 +5559,10 @@ window.__infoTooltip = InfoTooltip;
     if (dupKeys) notes.push("같은 기준값이 여러 번 나타나는 키 " + dupKeys + "건은 등장 순서대로 짝지어 비교했습니다. (기준 컬럼을 추가하시면 정확해집니다)");
     const renamed = compareCols.filter((c) => norm(c.name) !== norm(c.nameB));
     if (renamed.length) notes.push("이름이 다른 열을 짝지어 비교했습니다: " + renamed.map((c) => c.name + " ↔ " + c.nameB).join(", "));
-    return { records, summary, notes, compareCols, keyCols, tA, tB, axis: "row" };
+    return { records, summary, notes, compareCols, keyCols, tA, tB };
   }
 
-  /** 값 한 쌍을 비교해 변경 유형을 분류한다(변경이 없으면 cells 에 담지 않는다).
-   *  col 은 '무엇이 달라졌는지'를 가리키는 이름 — 행 기준에서는 열 이름, 열 기준에서는 행 라벨. */
+  /** 값 한 쌍을 비교해 변경 유형을 분류한다(변경이 없으면 cells 에 담지 않는다). */
   function diffCell(col, va, vb, cells, tags, zeroByCol) {
     const misA = Values.isMissing(va), misB = Values.isMissing(vb);
     if (misA && misB) return;
@@ -5708,7 +5599,7 @@ window.__infoTooltip = InfoTooltip;
     }
   }
 
-  /** [행 기준] 매칭된 두 행의 셀 단위 비교. 동일한 수치 쌍은 zeroByCol 에 집계한다. */
+  /** 매칭된 두 행의 셀 단위 비교. 동일한 수치 쌍은 zeroByCol 에 집계한다. */
   function compareRow(tA, tB, mapAB, key, ai, bi, zeroByCol, keySetA) {
     const cells = []; const tags = [];
     for (const [i, j] of mapAB) {
@@ -5716,95 +5607,6 @@ window.__infoTooltip = InfoTooltip;
       diffCell(tA.columns[i], tA.rows[ai][i], tB.rows[bi][j], cells, tags, zeroByCol);
     }
     return { status: cells.length ? "변경" : "동일", key, tags, cells, ai, bi };
-  }
-
-  /** [열 기준] 매칭된 두 열의 행 단위 비교.
-   *  items 는 짝지어진 행 쌍 목록 [{ai: A행, bi: B행, name: 행 라벨}] 이고,
-   *  ci/cj 는 비교할 A/B 열 위치다. 표를 전치하지 않고 rows[행][열] 을 그대로 읽는다. */
-  function compareColumn(tA, tB, items, key, ci, cj, zeroByCol) {
-    const cells = []; const tags = [];
-    for (const it of items) diffCell(it.name, tA.rows[it.ai][ci], tB.rows[it.bi][cj], cells, tags, zeroByCol);
-    return { status: cells.length ? "변경" : "동일", key, tags, cells, ai: ci, bi: cj };
-  }
-
-  /** [열 기준 비교] 열을 매칭 단위로, 그 열의 행 값들을 비교한다.
-   *  - 매칭 기준: 열(\u2462 열 매칭에서 지정한 A열 \u2194 B열). 결과의 기준값은 '열 이름'이다.
-   *  - 비교 항목: 행. 행 라벨 컬럼의 값이 같은 행끼리 짝짓는다(중복은 등장 순서대로).
-   *  반환 형태는 행 기준(compareTables)과 동일하여 렌더/다운로드를 그대로 재사용한다. */
-  function compareTablesByColumn(tA, tB, keyPairs, opts, colMap) {
-    const pairs = keyPairs.map((p) => ({ a: p.a, b: p.b }));
-    const labelA = pairs.length ? pairs[0].a : 0, labelB = pairs.length ? pairs[0].b : 0;
-
-    // 1) 비교 항목(행) 짝짓기 — 행 라벨이 같은 행끼리
-    const ga = groupByKey(tA, [labelA]), gb = groupByKey(tB, [labelB]);
-    const usedName = new Set();
-    const uniqName = (n) => { let k = n, c = 2; while (usedName.has(k)) k = n + "(" + c++ + ")"; usedName.add(k); return k; };
-    const items = [], rowOnlyA = [], rowOnlyB = [];
-    let dupLabels = 0;
-    for (const [key, arrA] of ga.groups) {
-      const arrB = gb.groups.get(key) || [];
-      if (arrA.length > 1 || arrB.length > 1) dupLabels++;
-      const m = Math.min(arrA.length, arrB.length);
-      for (let k = 0; k < m; k++) items.push({ ai: arrA[k], bi: arrB[k], name: uniqName(keyLabel(key)) });
-      for (let k = m; k < arrA.length; k++) rowOnlyA.push(keyLabel(key));
-      for (let k = m; k < arrB.length; k++) rowOnlyB.push(keyLabel(key));
-    }
-    for (const [key, arrB] of gb.groups) {
-      if (ga.groups.has(key)) continue;
-      for (let k = 0; k < arrB.length; k++) rowOnlyB.push(keyLabel(key));
-    }
-    // 결과 표의 가로 컬럼 = 짝지어진 행(비교 항목)
-    const compareCols = items.map((it) => ({ ai: it.ai, bi: it.bi, name: it.name, nameB: it.name }));
-    // 매칭 기준은 '열 이름' 하나 — 결과 표의 기준 컬럼 자리에 열 이름이 들어간다
-    const keyCols = [{ ai: labelA, bi: labelB, name: "열 이름" }];
-
-    // 2) 비교 단위(열) 매칭 — 사용자가 \u2462에서 지정한 매핑을 그대로 사용
-    const mapAB = colMap instanceof Map ? new Map(colMap) : autoColMap(tA, tB, pairs);
-    mapAB.set(labelA, labelB);                       // 행 라벨 컬럼끼리는 항상 대응(비교에서는 제외)
-    const usedB = new Set([...mapAB.values()]);
-    const records = [], zeroByCol = new Map(), renamed = [];
-    for (let i = 0; i < tA.columns.length; i++) {
-      if (i === labelA) continue;                    // 행 라벨 컬럼은 매칭에 쓰였으므로 비교 단위에서 제외
-      if (!mapAB.has(i)) {                           // A 에만 있는 열 = 삭제된 열
-        records.push({ status: "삭제", key: tA.columns[i], tags: [], cells: [], ai: i, bi: null });
-        continue;
-      }
-      const j = mapAB.get(i);
-      if (norm(tA.columns[i]) !== norm(tB.columns[j])) renamed.push(tA.columns[i] + " \u2194 " + tB.columns[j]);
-      records.push(compareColumn(tA, tB, items, tA.columns[i], i, j, zeroByCol));
-    }
-    for (let j = 0; j < tB.columns.length; j++) {    // B 에만 있는 열 = 추가된 열
-      if (j === labelB || usedB.has(j)) continue;
-      records.push({ status: "추가", key: tB.columns[j], tags: [], cells: [], ai: null, bi: j });
-    }
-
-    // 3) 이상 변동 판정 — 행 라벨별로 모아 '같은 항목의 열 간 변화' 를 본다
-    applyAnomalyRules(records, opts, zeroByCol);
-    for (const rec of records) {
-      const hasNumAnom = rec.cells.some((c) => c.anom && c.anom.length);
-      const hasMissingChange = rec.cells.some((c) => c.type === "missing");
-      if (hasNumAnom || hasMissingChange) rec.tags.push("이상 변동");
-    }
-
-    // 4) 요약
-    const count = (st) => records.filter((r) => r.status === st).length;
-    const cellCount = (type) => records.reduce((s, r) => s + r.cells.filter((c) => c.type === type).length, 0);
-    const summary = {
-      total: records.length,
-      same: count("동일"), changed: count("변경"),
-      added: count("추가"), removed: count("삭제"),
-      anomalyRows: records.filter((r) => r.tags.includes("이상 변동")).length,
-      missingCells: cellCount("missing"), typeCells: cellCount("type"),
-    };
-    const notes = ["열을 매칭 단위로, 매칭된 열 안의 행 값들을 비교했습니다. (행 라벨 컬럼: A '" +
-      tA.columns[labelA] + "' \u2194 B '" + tB.columns[labelB] + "')"];
-    if (!items.length) notes.push("양쪽에 공통으로 있는 행 라벨이 없어 비교할 항목이 없습니다. 행 라벨 컬럼을 다시 선택해 주세요.");
-    if (rowOnlyA.length) notes.push("A에만 있는 행(비교 제외): " + rowOnlyA.join(", "));
-    if (rowOnlyB.length) notes.push("B에만 있는 행(비교 제외): " + rowOnlyB.join(", "));
-    if (ga.emptyKey || gb.emptyKey) notes.push("행 라벨이 비어 있어 비교에서 제외된 행: A " + ga.emptyKey + "건, B " + gb.emptyKey + "건");
-    if (dupLabels) notes.push("같은 행 라벨이 여러 번 나타나는 경우 " + dupLabels + "건은 등장 순서대로 짝지어 비교했습니다.");
-    if (renamed.length) notes.push("이름이 다른 열을 짝지어 비교했습니다: " + renamed.join(", "));
-    return { records, summary, notes, compareCols, keyCols, tA, tB, axis: "col" };
   }
 
   /** 이상 변동 규칙(변화율/Z-Score/IQR)을 수치 변화 셀에 적용한다.
@@ -5869,14 +5671,11 @@ window.__infoTooltip = InfoTooltip;
   /* ---------- 실행/렌더 ---------- */
   $("btnCompare").addEventListener("click", async () => {
     if (!slots.A || !slots.B) return;
-    const byCol = isColAxis();
     const keyPairs = getKeyPairs();
-    if (!keyPairs.length) { setCmpError((byCol ? "행 라벨 컬럼" : "행 매칭 기준 컬럼") + "을 선택해 주세요."); return; }
+    if (!keyPairs.length) { setCmpError("행 매칭 기준 컬럼을 선택해 주세요."); return; }
     const colMap = getColMap();
     if ([...colMap.keys()].filter((i) => !keyPairs.some((p) => p.a === i)).length === 0) {
-      setCmpError(byCol
-        ? "매칭된 열이 없습니다. \u2462 열 매칭에서 비교할 열을 1개 이상 짝지어 주세요."
-        : "비교할 열이 없습니다. \u2462 열 매핑에서 비교할 열을 1개 이상 지정해 주세요."); return;
+      setCmpError("비교할 열이 없습니다. \u2462 열 매핑에서 비교할 열을 1개 이상 지정해 주세요."); return;
     }
     // 수치 파라미터 안전 파싱(비정상 입력은 범위로 보정 후 입력창에 반영)
     const clampNum = (id, def, lo, hi) => {
@@ -5895,16 +5694,14 @@ window.__infoTooltip = InfoTooltip;
     };
     $("btnCompare").disabled = true; setCmpError("");
     try {
-      setCmpProgress(20); setCmpStatus("두 파일의 " + (byCol ? "열" : "행") + "을 비교하고 있습니다...");
+      setCmpProgress(20); setCmpStatus("두 파일의 행을 비교하고 있습니다...");
       await new Promise((r) => setTimeout(r, 0));
-      lastCompare = byCol
-        ? compareTablesByColumn(tblA(), tblB(), keyPairs, opts, colMap)
-        : compareTables(tblA(), tblB(), keyPairs, opts, colMap);
+      lastCompare = compareTables(tblA(), tblB(), keyPairs, opts, colMap);
       setCmpProgress(90); setCmpStatus("결과를 정리하고 있습니다...");
       await new Promise((r) => setTimeout(r, 0));
       renderCompare(lastCompare);
       setCmpProgress(100);
-      setCmpStatus("비교가 완료되었습니다. 전체 " + lastCompare.summary.total + (byCol ? "열" : "행") + " 중 변경 "
+      setCmpStatus("비교가 완료되었습니다. 전체 " + lastCompare.summary.total + "행 중 변경 "
         + lastCompare.summary.changed + " · 추가 " + lastCompare.summary.added
         + " · 삭제 " + lastCompare.summary.removed + "건입니다.");
       $("cmpResultPanel").classList.remove("hidden");
@@ -5944,14 +5741,13 @@ window.__infoTooltip = InfoTooltip;
 
   function renderCompare(result) {
     const s = result.summary;
-    const unit = result.axis === "col" ? "열" : "행";
     $("cmpSummary").innerHTML =
-      '<div class="stat"><b>' + s.total + "</b>총 비교 " + unit + "</div>" +
+      '<div class="stat"><b>' + s.total + "</b>총 비교 행</div>" +
       '<div class="stat"><b style="color:#8a97a5">' + s.same + "</b>동일</div>" +
       '<div class="stat"><b style="color:#b98a00">' + s.changed + "</b>변경</div>" +
       '<div class="stat"><b style="color:#2e7d32">' + s.added + "</b>추가</div>" +
       '<div class="stat"><b style="color:#c62828">' + s.removed + "</b>삭제</div>" +
-      '<div class="stat"><b style="color:#b23c17">' + s.anomalyRows + "</b>이상 변동 " + unit + "</div>" +
+      '<div class="stat"><b style="color:#b23c17">' + s.anomalyRows + "</b>이상 변동 행</div>" +
       '<div class="stat"><b>' + s.missingCells + "</b>결측값 변경(셀)</div>" +
       '<div class="stat"><b>' + s.typeCells + "</b>타입 변경(셀)</div>";
     $("cmpNotes").innerHTML = result.notes.map((n) => "· " + esc(n)).join("<br>");
@@ -5977,29 +5773,25 @@ window.__infoTooltip = InfoTooltip;
         '<span class="muted">' + esc(extra) + "</span></td>";
     }
     // 변경 없음: 상태에 따라 존재하는 쪽 값을 보여 준다
-    //   행 기준 → rec = 행 / col = 열,  열 기준 → rec = 열 / col = 행 (읽는 축만 반대)
     const t = rec.status === "추가" ? result_tB : result_tA;
-    const u = rec.status === "추가" ? rec.bi : rec.ai;
-    const f = rec.status === "추가" ? col.bi : col.ai;
-    if (u == null || f == null || !t) return '<td class="muted">-</td>';
-    const v = result_axis === "col" ? t.rows[f][u] : t.rows[u][f];
+    const ri = rec.status === "추가" ? rec.bi : rec.ai;
+    const ci = rec.status === "추가" ? col.bi : col.ai;
+    if (ri == null || ci == null || !t) return '<td class="muted">-</td>';
+    const v = t.rows[ri][ci];
     return '<td class="cmp-same">' + (Values.isMissing(v) ? "" : esc(Values.cellText(v))) + "</td>";
   }
   let result_tA = null, result_tB = null;   // 렌더링 중 참조할 원본 표
-  let result_axis = "row";                  // 렌더링 중 비교 축
 
   function renderCompareTable(result) {
     const filter = $("cmpFilter").value;
     const thead = $("cmpTable").querySelector("thead");
     const tbody = $("cmpTable").querySelector("tbody");
-    result_tA = result.tA; result_tB = result.tB; result_axis = result.axis || "row";
-    const byCol = result_axis === "col";
+    result_tA = result.tA; result_tB = result.tB;
     const cols = result.compareCols || [];
     const keyCols = result.keyCols || [];
-    // 헤더: 상태 | 매칭 기준(행 기준=구분 컬럼 / 열 기준=열 이름) | 비교 항목들 | 태그
+    // 헤더: 상태 | 기준 컬럼(들) | 비교 열들 | 태그
     thead.innerHTML = "<tr><th>상태</th>" +
-      keyCols.map((k) => "<th>" + esc(k.name) + " <span class='muted'>(" +
-        (byCol ? "열 매칭 기준" : "기준") + ")</span></th>").join("") +
+      keyCols.map((k) => "<th>" + esc(k.name) + " <span class='muted'>(기준)</span></th>").join("") +
       cols.map((c) => "<th title=\"A: " + esc(c.name) + " \u2194 B: " + esc(c.nameB) + "\">" + esc(c.name) +
         (norm(c.name) !== norm(c.nameB) ? " <span class='muted'>↔ " + esc(c.nameB) + "</span>" : "") + "</th>").join("") +
       "<th>태그</th></tr>";
@@ -6023,9 +5815,8 @@ window.__infoTooltip = InfoTooltip;
         "<td>" + (tagHtml || '<span class="muted">-</span>') + "</td></tr>";
     }
     tbody.innerHTML = html || '<tr><td colspan="' + colspan + '" class="muted">표시할 행이 없습니다.</td></tr>';
-    $("cmpNote").textContent = "표시: " + shown + " / " + matched + (byCol ? " 열 · 비교 행 " : " 행 · 비교 열 ") +
-      cols.length + "개" +
-      (matched > PREVIEW_LIMIT ? " (상위 " + PREVIEW_LIMIT + (byCol ? "열" : "행") + "까지만 미리보기로 보여 드립니다)" : "");
+    $("cmpNote").textContent = "표시: " + shown + " / " + matched + " 행 · 비교 열 " + cols.length + "개" +
+      (matched > PREVIEW_LIMIT ? " (상위 " + PREVIEW_LIMIT + "행까지만 미리보기로 보여 드립니다)" : "");
   }
   $("cmpFilter").addEventListener("change", () => { if (lastCompare) renderCompareTable(lastCompare); });
 
@@ -6050,8 +5841,7 @@ window.__infoTooltip = InfoTooltip;
   $("btnCmpDownload").addEventListener("click", () => {
     if (!lastCompare) return;
     const SLOT = { "변경": 1, "추가": 2, "삭제": 3, "동일": 0 };
-    // 가로형: 상태 | 매칭 기준 | 비교 항목마다 1칸(변경 시 '이전 \u2192 이후') | 태그
-    const byColDl = lastCompare.axis === "col";
+    // 가로형: 상태 | 기준 컬럼(들) | 비교 열마다 1칸(변경 시 '이전 \u2192 이후') | 태그
     const keyCols = lastCompare.keyCols || [], cmpCols = lastCompare.compareCols || [];
     const tA = lastCompare.tA, tB = lastCompare.tB;
     const cols = ["상태"].concat(keyCols.map((k) => k.name))
@@ -6066,10 +5856,9 @@ window.__infoTooltip = InfoTooltip;
         const c = cellByCol.get(col.name);
         if (c) { line.push(cellChangeText(c).replace(col.name + ": ", "")); continue; }
         const t = rec.status === "추가" ? tB : tA;
-        const u = rec.status === "추가" ? rec.bi : rec.ai;
-        const f = rec.status === "추가" ? col.bi : col.ai;
-        line.push(u == null || f == null || !t ? "" :
-          Values.cellText(byColDl ? t.rows[f][u] : t.rows[u][f]));
+        const ri = rec.status === "추가" ? rec.bi : rec.ai;
+        const ci = rec.status === "추가" ? col.bi : col.ai;
+        line.push(ri == null || ci == null || !t ? "" : Values.cellText(t.rows[ri][ci]));
       }
       line.push(rec.tags.join(", "));
       rows.push(line);
@@ -6077,8 +5866,8 @@ window.__infoTooltip = InfoTooltip;
     }
     const s = lastCompare.summary;
     const sumRows = [
-      [byColDl ? "총 비교 열" : "총 비교 행", s.total], ["동일", s.same], ["변경", s.changed],
-      ["추가", s.added], ["삭제", s.removed], [byColDl ? "이상 변동 열" : "이상 변동 행", s.anomalyRows],
+      ["총 비교 행", s.total], ["동일", s.same], ["변경", s.changed],
+      ["추가", s.added], ["삭제", s.removed], ["이상 변동 행", s.anomalyRows],
       ["결측값 변경(셀)", s.missingCells], ["타입 변경(셀)", s.typeCells],
     ].concat(lastCompare.notes.map((n) => ["안내", n]));
     const bytes = XlsxWriter.buildWorkbook([
@@ -6089,7 +5878,7 @@ window.__infoTooltip = InfoTooltip;
   });
 
   // 테스트 편의를 위해 내부 기능 노출
-  window.__compare = { slots, inferKeys, compareTables, compareTablesByColumn, handleSlotFile, switchMode, nameScore, getKeyPairs, getColMap, autoColMap, posColMap, groupByKey };
+  window.__compare = { slots, inferKeys, compareTables, handleSlotFile, switchMode, nameScore, getKeyPairs, getColMap, autoColMap, posColMap, groupByKey };
 })();
 
 /* =====================================================================
