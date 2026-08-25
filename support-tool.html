@@ -228,6 +228,14 @@
   select{ border:1px solid var(--line); border-radius:6px; padding:7px 9px; font-size:13px; background:#fff; }
   /* 비교 결과 행/셀 강조 */
   #cmpTable td{ white-space:normal; }
+  /* 등록 적합성 점검 결과 */
+  #chkTable td, #chkOptTable td{ vertical-align:top; }
+  #chkTable td.chk-lv, #chkOptTable td.chk-lv{ white-space:nowrap; }
+  .chk-badge{ display:inline-block; padding:1px 8px; border-radius:10px; font-size:11.5px; font-weight:700; }
+  .chk-bad{ background:#FDECEA; color:#c62828; }
+  .chk-warn{ background:#FFF7DE; color:#8a6d00; }
+  .chk-ok{ background:#E9F7EC; color:#2e7d32; }
+  .chk-ex{ color:#5a6b7b; font-size:12px; word-break:break-all; }
   /* 비교: 열 매핑 표 */
   #colMapTable td, #colMapTable th{ white-space:nowrap; }
   #colMapTable select{ width:210px; }
@@ -804,9 +812,35 @@
       <div id="cleanFileList" class="clean-files"></div>
     </div>
 
-    <!-- ③ 정제 옵션 -->
+    <!-- ③ 등록 적합성 점검 · 정제 진단 -->
+    <div class="panel coll" id="checkPanel">
+      <h2><span><span class="badge">3</span> 공공데이터포털 등록 적합성 점검</span><span class="coll-caret" aria-hidden="true">▼</span></h2>
+      <p class="muted">올리신 파일이 공공데이터포털에 <b>CSV 로 등록 가능한 형태</b>인지 점검하고,
+        아래 ④ 정제 옵션 중 <b>무엇이 실제로 필요한지</b> 함께 진단합니다. 변환 동작에는 영향을 주지 않는 안내 기능입니다.</p>
+      <div class="row" style="margin-bottom:10px; flex-wrap:wrap;">
+        <label class="muted">점검할 파일&nbsp;<select id="chkFile" style="max-width:280px;" disabled aria-label="점검할 파일"></select></label>
+        <label class="muted">시트 / 표&nbsp;<select id="chkSheet" style="max-width:220px;" disabled aria-label="점검할 시트"></select></label>
+        <button type="button" id="btnCheckRun" class="secondary" disabled>점검하기</button>
+        <button type="button" id="btnCheckDownload" class="secondary hidden">점검 결과 다운로드 (Excel)</button>
+      </div>
+      <div id="chkStatus" class="note">파일을 올리시면 점검할 수 있습니다.</div>
+      <div id="chkResult" class="hidden">
+        <div class="dash" id="chkScore" style="margin:12px 0;"></div>
+        <div class="clean-optgroup muted">등록 적합성</div>
+        <div class="tbl-scroll" style="max-height:340px;">
+          <table id="chkTable"><thead></thead><tbody></tbody></table>
+        </div>
+        <div class="clean-optgroup muted" style="margin-top:14px;">정제 옵션 진단 — 이 파일에 실제로 필요한 옵션</div>
+        <div class="tbl-scroll" style="max-height:320px;">
+          <table id="chkOptTable"><thead></thead><tbody></tbody></table>
+        </div>
+        <div id="chkOptNote" class="note"></div>
+      </div>
+    </div>
+
+    <!-- ④ 정제 옵션 -->
     <div class="panel coll" id="cleanOptPanel">
-      <h2><span><span class="badge">3</span> 데이터 정제 옵션</span><span class="coll-caret" aria-hidden="true">▼</span></h2>
+      <h2><span><span class="badge">4</span> 데이터 정제 옵션</span><span class="coll-caret" aria-hidden="true">▼</span></h2>
       <p class="muted">권장 옵션은 기본으로 켜져 있습니다. 원본 그대로 저장하시려면 옵션을 해제해 주세요.</p>
       <div class="clean-optgroup muted">기본 정제(권장)</div>
       <div class="grid-opts clean-opts">
@@ -838,7 +872,7 @@
       </div>
     </div>
 
-    <!-- ④ 실행 -->
+    <!-- ⑤ 실행 -->
     <div class="panel runbar">
       <div id="cleanStatus" style="margin-bottom:16px;">파일을 선택하고 [변환 시작]을 눌러 주세요.</div>
       <div class="progress-outer"><div class="progress-inner" id="cleanProgress"></div></div>
@@ -849,7 +883,7 @@
       </div>
     </div>
 
-    <!-- ⑤ 결과 -->
+    <!-- ⑥ 결과 -->
     <div class="panel hidden" id="cleanResultPanel">
       <h2>변환 결과</h2>
       <div id="cleanSummary" class="dash" style="margin-bottom:12px;"></div>
@@ -2417,7 +2451,7 @@ function gridToTable(grid) {
     if (any) { rows.push(row); rowNumbers.push(r + 1); }
   }
   // meta: 원본 서식 보존 다운로드(xlsx)에서 분석 컬럼을 정확한 행/열에 덧붙이기 위한 좌표
-  return { columns, rows, meta: { headerRowNum: headerRow + 1, leftCol: left, rightCol: right, rowNumbers } };
+  return { columns, rows, meta: { headerRowNum: headerRow + 1, headerLines: subRow >= 0 ? 2 : 1, leftCol: left, rightCol: right, rowNumbers } };
 }
 
 /* ---- 한 시트에서 표를 1개 이상 인식(다중 표 + 표 밖 텍스트 배제) ----
@@ -2561,7 +2595,7 @@ function detectTables(grid) {
       for (let c = left; c <= right; c++) { const v = src[c]; row.push(v === undefined ? null : v); if (!isBlank(v)) any = true; }
       if (any) { rows.push(row); rowNumbers.push(d + 1); }
     }
-    out.push({ columns, rows, meta: { headerRowNum: headerRow + 1, leftCol: left, rightCol: right, rowNumbers } });
+    out.push({ columns, rows, meta: { headerRowNum: headerRow + 1, headerLines: subRow >= 0 ? 2 : 1, leftCol: left, rightCol: right, rowNumbers } });
     start = dataEnd;
   }
   return out;
@@ -2784,7 +2818,21 @@ const XlsxReader = (function () {
 
   // 호환: 첫 시트를 자동 탐지하여 {columns, rows} 반환
   function read(bytes, index) { return gridToTable(grid(open(bytes), index || 0)); }
-  return { open, grid, gridDom, read };   // gridDom: 폴백/검증용
+  /** 시트의 병합 셀 범위 목록(예: ["A1:C1","B2:B5"]). 없으면 [].
+   *  공공데이터포털 등록 적합성 점검에서 사용한다(값 읽기에는 영향 없음). */
+  function merges(wb, index) {
+    const sheet = wb.sheets[index || 0];
+    if (!sheet || !wb.files[sheet.path]) return [];
+    const xml = dec.decode(wb.files[sheet.path]);
+    const st = xml.indexOf("<mergeCells");
+    if (st < 0) return [];
+    const en = xml.indexOf("</mergeCells>", st);
+    const body = en < 0 ? xml.slice(st) : xml.slice(st, en);
+    const out = []; const re = /<mergeCell[^>]*\sref="([^"]+)"/g; let m;
+    while ((m = re.exec(body))) out.push(m[1]);
+    return out;
+  }
+  return { open, grid, gridDom, read, merges };   // gridDom: 폴백/검증용
 })();
 
 const XlsReader = (function () {
@@ -3164,7 +3212,13 @@ async function loadWorkbook(file, onProgress, opts) {
     names.forEach((sname, si) => {
       const grid = gridOf(si);
       const tbls = detectTables(grid);
-      const withMeta = (t) => { t.meta = Object.assign({}, t.meta || {}, { sheetIndex: si }); return t; };
+      // 점검용 부가 정보: 시트의 비어 있지 않은 행 수 / 인식된 표 개수
+      let sheetRows = 0;
+      for (const r of grid) if (r && r.some((v) => !Values.isMissing(v))) sheetRows++;
+      const withMeta = (t) => {
+        t.meta = Object.assign({}, t.meta || {}, { sheetIndex: si, sheetRows, tableCount: tbls.length || 1 });
+        return t;
+      };
       if (tbls.length >= 2) tbls.forEach((t, ti) => entries.push({ name: sname + "_표" + (ti + 1), table: withMeta(t) }));
       else entries.push({ name: sname, table: withMeta(tbls[0] || gridToTable(grid)) });
     });
@@ -3204,6 +3258,294 @@ async function readFile(file, onProgress) {
 }
 // 시트 인식 UI 및 테스트에서 사용
 window.__readers = { loadWorkbook, readFile, gridToTable, detectTables };
+
+/* =====================================================================
+ * 6-b. 공공데이터포털 등록 적합성 점검 · 정제 옵션 진단
+ *
+ *  PortalCheck.check(table, ctx) : 파일데이터(CSV) 등록 시 문제가 되는 항목을
+ *      구조/컬럼명/값/개인정보로 나누어 진단한다. 판정은 위반·주의·통과 3단계.
+ *  CleanDiag.diagnose(table)     : 정제 옵션 15종을 각각 '그 옵션만 켠' 상태로
+ *      드라이런하여 바뀌는 셀이 있는지(=조치 필요) 확인한다.
+ *
+ *  ※ 점검 기준은 파일데이터 등록 시 일반적으로 요구되는 원칙을 코드화한 것으로,
+ *    기관별 등록 규정과 다를 수 있다. 판정은 안내이며 변환 동작에는 영향이 없다.
+ * ===================================================================== */
+const PortalCheck = (function () {
+  const V = Values;
+  const SAMPLE_MAX = 3;                       // 항목별 예시 개수
+  const SCAN_ROWS = 5000;                     // 값 점검 표본(대용량 보호)
+
+  const TOTAL_ROW_RE = /^(합\s*계|총\s*계|소\s*계|계|전\s*체|누\s*계|평\s*균|total|sum|subtotal)$/i;
+  const MISSING_MARK_RE = /^(n\/?a|na|없음|해당\s*없음|미상|불명|null|nil|-|x|X|\.{1,3})$/i;
+  const THOUS_RE = /^[+-]?\d{1,3}(,\d{3})+(\.\d+)?$/;
+  const SCI_RE = /^[+-]?\d+(\.\d+)?[eE][+-]?\d+$/;
+  const INVIS_RE = /[​‌‍⁠﻿­᠎؜‪-‮⁦-⁩]/;
+  const COLNAME_BAD_RE = /[\r\n\t]/;
+  // 컬럼명에 흔히 허용되는 문자: 한글·영문·숫자·공백과 ( ) _ - . , / % ㎡ ~ · 및 단위 기호
+  const COLNAME_OK_RE = /^[0-9A-Za-z가-힣㄰-㆏\s()_\-.,/%~·㎡㎥㎞㎏℃°'"]+$/;
+  const ISO_DATE_RE = /^\d{4}-\d{2}-\d{2}$/;
+
+  const col = (c) => String(c == null ? "" : c);
+  const at = (r, c) => "행 " + r + " · " + c;
+
+  /** 열 위치(0-based) → 엑셀 열 문자(A, B, ... AA) */
+  function colLetter(i) {
+    let s = "", n = i + 1;
+    while (n > 0) { const m = (n - 1) % 26; s = String.fromCharCode(65 + m) + s; n = ((n - m) / 26) | 0; }
+    return s;
+  }
+
+  /** 표 1개 점검.
+   *  ctx: { fileName, sheetName, merges: [], csvEncoding: "cp949"|"utf-8"|null, deid: DeidEngine|null }
+   *  반환: { items: [...], counts: {bad, warn, ok} } */
+  function check(table, ctx) {
+    const c = ctx || {};
+    const cols = (table.columns || []).map(col);
+    const rows = table.rows || [];
+    const meta = table.meta || {};
+    const n = Math.min(rows.length, SCAN_ROWS);
+    const sampled = rows.length > n;
+    const items = [];
+    const add = (level, group, title, detail, count, samples, fix) =>
+      items.push({ level, group, title, detail, count: count || 0, samples: samples || [], fix: fix || "" });
+
+    /* ---------- 1) 구조 ---------- */
+    const above = Math.max(0, (meta.headerRowNum || 1) - 1);
+    if (above > 0)
+      add("주의", "구조", "표 위에 제목·설명 행이 있습니다", "첫 행이 컬럼명이어야 합니다. 변환 시 자동으로 제외되지만, 원본을 그대로 올리시면 반려될 수 있습니다.",
+        above, ["원본 1~" + above + "행"]);
+    else add("통과", "구조", "첫 행이 컬럼명입니다", "", 0, []);
+
+    const tableCount = meta.tableCount || 1;
+    if (tableCount >= 2)
+      add("주의", "구조", "한 시트에 표가 " + tableCount + "개 있습니다", "등록은 파일 하나에 표 하나가 원칙입니다. 변환 시 `_표1`, `_표2` 로 나눠 저장됩니다.", tableCount, []);
+    else add("통과", "구조", "한 시트에 표가 1개입니다", "", 0, []);
+
+    if (tableCount === 1 && meta.sheetRows) {
+      // 표 밖 행 = 시트의 비어 있지 않은 행 - (표 위 행 + 헤더 행 + 데이터 행)
+      const outside = meta.sheetRows - rows.length - above - (meta.headerLines || 1);
+      if (outside > 0)
+        add("주의", "구조", "표 밖(아래·옆)에 " + outside + "행이 있습니다", "주석·출처·단위 안내 등은 등록 파일에서 빼 주세요. 변환 시 자동으로 제외됩니다.", outside, []);
+    }
+
+    const mg = c.merges || [];
+    if (mg.length)
+      add("위반", "구조", "병합된 셀이 " + mg.length + "곳 있습니다", "CSV 는 병합을 표현할 수 없습니다. 병합을 풀고 각 셀에 값을 채워 주세요.",
+        mg.length, mg.slice(0, SAMPLE_MAX));
+    else if (c.merges) add("통과", "구조", "병합된 셀이 없습니다", "", 0, []);
+
+    // 소계·합계 행
+    const totalRows = [];
+    for (let r = 0; r < n; r++) {
+      const first = V.cellText(rows[r][0]).trim();
+      if (first && TOTAL_ROW_RE.test(first)) totalRows.push(at(r + 1, first));
+    }
+    if (totalRows.length)
+      add("주의", "구조", "소계·합계 행이 " + totalRows.length + "행 있습니다", "집계 행은 원자료에 포함하지 않는 것이 원칙입니다.",
+        totalRows.length, totalRows.slice(0, SAMPLE_MAX));
+    else add("통과", "구조", "소계·합계 행이 없습니다", "", 0, []);
+
+    // 값이 전부 비어 있는 열
+    const blankCols = [];
+    for (let ci = 0; ci < cols.length; ci++) {
+      let any = false;
+      for (let r = 0; r < n && !any; r++) if (!V.isMissing(rows[r][ci])) any = true;
+      if (!any) blankCols.push(cols[ci] || colLetter(ci) + "열");
+    }
+    if (blankCols.length)
+      add("주의", "구조", "값이 하나도 없는 열이 " + blankCols.length + "개 있습니다", "빈 열은 삭제해 주세요.",
+        blankCols.length, blankCols.slice(0, SAMPLE_MAX));
+
+    /* ---------- 2) 컬럼명 ---------- */
+    const seen = new Map(), dup = [];
+    cols.forEach((cn, i) => {
+      const k = cn.trim();
+      if (seen.has(k)) dup.push(k + " (" + colLetter(seen.get(k)) + " · " + colLetter(i) + ")");
+      else seen.set(k, i);
+    });
+    if (dup.length)
+      add("위반", "컬럼명", "컬럼명이 중복됩니다 (" + dup.length + "건)", "컬럼명은 서로 달라야 합니다.", dup.length, dup.slice(0, SAMPLE_MAX));
+    else add("통과", "컬럼명", "컬럼명이 모두 다릅니다", "", 0, []);
+
+    // 비어 있는 컬럼명(표 인식이 '열N' 로 자동 부여한 것)
+    const autoName = [];
+    cols.forEach((cn, i) => { if (!cn.trim() || /^열\d+$/.test(cn.trim())) autoName.push(colLetter(i) + "열: " + (cn || "(빈 이름)")); });
+    if (autoName.length)
+      add("위반", "컬럼명", "이름이 비어 있는 열이 " + autoName.length + "개 있습니다", "원본 머리글이 비어 있어 임시 이름이 붙었습니다. 실제 컬럼명을 넣어 주세요.",
+        autoName.length, autoName.slice(0, SAMPLE_MAX));
+    else add("통과", "컬럼명", "모든 열에 이름이 있습니다", "", 0, []);
+
+    const ctrlName = cols.filter((cn) => COLNAME_BAD_RE.test(cn) || INVIS_RE.test(cn));
+    if (ctrlName.length)
+      add("위반", "컬럼명", "컬럼명에 줄바꿈·Tab·보이지 않는 문자가 있습니다", "CSV 머리글이 깨집니다.",
+        ctrlName.length, ctrlName.slice(0, SAMPLE_MAX).map((x) => JSON.stringify(x)));
+
+    const oddName = cols.filter((cn) => cn.trim() && !COLNAME_BAD_RE.test(cn) && !COLNAME_OK_RE.test(cn));
+    if (oddName.length)
+      add("주의", "컬럼명", "컬럼명에 특수문자가 있습니다 (" + oddName.length + "개)", "한글·영문·숫자와 ( ) _ - . / % 정도만 쓰시는 것이 안전합니다.",
+        oddName.length, oddName.slice(0, SAMPLE_MAX));
+
+    /* ---------- 3) 값 형식 ---------- */
+    if (c.csvEncoding && c.csvEncoding !== "utf-8")
+      add("주의", "값 형식", "원본 CSV 인코딩이 " + c.csvEncoding.toUpperCase() + " 입니다", "등록 파일은 UTF-8 로 저장해 주세요. 이 도구의 CSV 저장은 기본이 UTF-8(BOM) 입니다.", 1, []);
+
+    const scan = { thousand: [], sci: [], newline: [], space: [], invis: [], missMark: [], mixNum: [], badDate: [] };
+    // 컬럼별 숫자/날짜 비율(문자 혼입·날짜 형식 판정용)
+    const numHit = new Array(cols.length).fill(0), dateHit = new Array(cols.length).fill(0), filled = new Array(cols.length).fill(0);
+    const nonNum = [];
+    for (let ci = 0; ci < cols.length; ci++) nonNum.push([]);
+    for (let r = 0; r < n; r++) {
+      const row = rows[r] || [];
+      for (let ci = 0; ci < cols.length; ci++) {
+        const v = row[ci];
+        if (V.isMissing(v)) continue;
+        filled[ci]++;
+        const isNum = typeof v === "number" || V.toNumber(v) !== null;
+        const isDate = v instanceof Date || V.toDate(v) !== null;
+        if (isNum) numHit[ci]++; else if (isDate) dateHit[ci]++;
+        if (typeof v !== "string") {
+          if (isDate && v instanceof Date) { /* 엑셀 날짜 셀 — 형식은 저장 시 결정 */ }
+          continue;
+        }
+        const t = v.trim();
+        if (THOUS_RE.test(t) && scan.thousand.length < 50) scan.thousand.push(at(r + 1, cols[ci]) + ": " + t);
+        if (SCI_RE.test(t) && scan.sci.length < 50) scan.sci.push(at(r + 1, cols[ci]) + ": " + t);
+        if (/[\r\n]/.test(v) && scan.newline.length < 50) scan.newline.push(at(r + 1, cols[ci]));
+        if ((v !== t || / {2,}/.test(v) || /\t/.test(v)) && scan.space.length < 50) scan.space.push(at(r + 1, cols[ci]) + ": " + JSON.stringify(v.slice(0, 20)));
+        if (INVIS_RE.test(v) && scan.invis.length < 50) scan.invis.push(at(r + 1, cols[ci]));
+        if (MISSING_MARK_RE.test(t) && scan.missMark.length < 50) scan.missMark.push(at(r + 1, cols[ci]) + ": " + t);
+        if (!isNum && !isDate) nonNum[ci].push(at(r + 1, cols[ci]) + ": " + t.slice(0, 20));
+      }
+    }
+    // 숫자 컬럼(값의 80% 이상이 숫자)에 문자가 섞인 경우
+    for (let ci = 0; ci < cols.length; ci++) {
+      if (filled[ci] >= 5 && numHit[ci] / filled[ci] >= 0.8 && nonNum[ci].length)
+        scan.mixNum.push(...nonNum[ci].slice(0, 2));
+    }
+    // 날짜 컬럼의 표기가 YYYY-MM-DD 가 아닌 경우
+    for (let ci = 0; ci < cols.length; ci++) {
+      if (!(filled[ci] >= 5 && dateHit[ci] / filled[ci] >= 0.8)) continue;
+      let bad = 0, ex = null;
+      for (let r = 0; r < n; r++) {
+        const v = (rows[r] || [])[ci];
+        if (V.isMissing(v) || v instanceof Date) continue;
+        const t = V.cellText(v).trim();
+        if (t && !ISO_DATE_RE.test(t)) { bad++; if (!ex) ex = cols[ci] + ": " + t; }
+      }
+      if (bad) scan.badDate.push(ex + " (" + bad + "건)");
+    }
+
+    const valRule = [
+      ["thousand", "위반", "숫자에 천 단위 구분기호(,)가 있습니다", "CSV 에서 열이 밀리거나 문자로 인식됩니다.", "cl_thousep"],
+      ["sci", "위반", "지수(E) 표기 숫자가 있습니다", "1.11E+14 같은 값은 자릿수가 손실된 채 등록됩니다.", "cl_expexp"],
+      ["newline", "위반", "셀 안에 줄바꿈이 있습니다", "CSV 행이 깨질 수 있습니다.", "cl_newline"],
+      ["invis", "주의", "보이지 않는 문자가 있습니다", "폭 없는 공백·BOM 등이 값에 섞여 있습니다.", "cl_invisible"],
+      ["space", "주의", "앞뒤·연속 공백 또는 Tab 이 있습니다", "값이 서로 다른 것으로 취급될 수 있습니다.", "cl_trim"],
+      ["missMark", "주의", "결측 표기가 문자로 들어 있습니다", "`-`, `x`, `해당없음`, `N/A` 등은 빈칸 또는 한 가지 규칙으로 통일해 주세요.", "cl_dashxnull"],
+      ["mixNum", "주의", "숫자 열에 문자가 섞여 있습니다", "숫자 열은 숫자만 두고, 단위·비고는 별도 열로 분리해 주세요.", ""],
+      ["badDate", "주의", "날짜 표기가 YYYY-MM-DD 가 아닙니다", "날짜는 `2026-08-25` 형태로 통일해 주세요.", ""],
+    ];
+    for (const [k, level, title, detail, fix] of valRule) {
+      const list = scan[k];
+      if (list.length) add(level, "값 형식", title + " (" + list.length + (list.length >= 50 ? "건 이상" : "건") + ")", detail, list.length, list.slice(0, SAMPLE_MAX), fix);
+      else add("통과", "값 형식", title.replace(/있습니다$/, "없습니다").replace(/아닙니다$/, "맞습니다"), "", 0, []);
+    }
+
+    /* ---------- 4) 개인정보 ---------- */
+    if (c.deid) {
+      let hits = [];
+      try {
+        const det = c.deid.detect(table.columns || [], rows.slice(0, 200));
+        hits = (det || []).filter((d) => d && d.detected);
+      } catch (e) { hits = []; }
+      if (hits.length)
+        add("위반", "개인정보", "개인정보로 보이는 열이 " + hits.length + "개 있습니다", "공개 전 [개인정보 비식별] 모드에서 마스킹·삭제 처리를 검토해 주세요.",
+          hits.length, hits.slice(0, SAMPLE_MAX).map((h) => col(h.column) + " (" + h.typeLabel + " · 확신 " + h.confidence + ")"));
+      else add("통과", "개인정보", "개인정보로 보이는 열이 없습니다", "", 0, []);
+    }
+
+    const counts = { bad: 0, warn: 0, ok: 0 };
+    items.forEach((i) => { if (i.level === "위반") counts.bad++; else if (i.level === "주의") counts.warn++; else counts.ok++; });
+    return { items, counts, sampled, scanned: n, total: rows.length };
+  }
+
+  return { check, colLetter };
+})();
+
+const CleanDiag = (function () {
+  const V = Values;
+  const D = DataCleaner;
+  const SCAN_ROWS = 5000;
+  const SAMPLE_MAX = 3;
+
+  // 화면 체크박스 id ↔ DataCleaner 옵션. specialMode 만 값이 문자열이다.
+  const OPTIONS = [
+    { id: "cl_trim", set: { trimSpace: true }, label: "앞뒤 공백 제거" },
+    { id: "cl_collapse", set: { collapseSpace: true }, label: "연속 공백 정리" },
+    { id: "cl_tab", set: { removeTab: true }, label: "Tab 문자 제거" },
+    { id: "cl_newline", set: { removeNewline: true }, label: "줄바꿈 제거" },
+    { id: "cl_fixtype", set: { fixTypes: true }, label: "숫자/문자 형식 변환" },
+    { id: "cl_invisible", set: { removeInvisible: true }, label: "보이지 않는 문자 제거" },
+    { id: "cl_expexp", set: { expandExp: true }, label: "지수(E)표기 복원" },
+    { id: "cl_thousep", set: { thousandSep: true }, label: "천 단위 구분기호(,) 제거" },
+    { id: "cl_allspecial", set: { specialMode: "all" }, label: "모든 특수문자 제거" },
+    { id: "cl_dashxzero", set: { dashXToZero: true }, label: '"-", "x", "X" → 0' },
+    { id: "cl_nullzero", set: { nullToZero: true }, label: "NULL → 0" },
+    { id: "cl_nullempty", set: { nullToEmpty: true }, label: "NULL → 빈 문자열" },
+    { id: "cl_dashxnull", set: { dashXToNull: true }, label: '"-", "x", "X" → NULL' },
+    { id: "cl_zeronull", set: { zeroToNull: true }, label: "0 → NULL" },
+    { id: "cl_emptynull", set: { emptyToNull: true }, label: "빈 문자열 → NULL" },
+  ];
+  // 동시에 켜면 서로 상쇄/충돌하는 조합(진단 결과에 안내로 표시)
+  const CONFLICTS = [
+    ["cl_nullzero", "cl_nullempty"], ["cl_nullzero", "cl_zeronull"],
+    ["cl_dashxzero", "cl_dashxnull"], ["cl_nullempty", "cl_emptynull"],
+  ];
+
+  function allOff() {
+    const o = {};
+    Object.keys(D.DEFAULTS).forEach((k) => { o[k] = typeof D.DEFAULTS[k] === "string" ? "keep" : false; });
+    return o;
+  }
+  /** 두 셀 값이 같은가(타입까지 동일해야 같다고 본다). */
+  function sameCell(a, b) {
+    if (V.isMissing(a) && V.isMissing(b)) return true;
+    if (V.isMissing(a) !== V.isMissing(b)) return false;
+    if (a instanceof Date && b instanceof Date) return a.getTime() === b.getTime();
+    if (a instanceof Date || b instanceof Date) return false;
+    if (typeof a !== typeof b) return false;
+    return a === b;
+  }
+  const show = (v) => V.isMissing(v) ? "(빈 값)" : (typeof v === "string" ? JSON.stringify(v) : V.cellText(v));
+
+  /** 옵션 15종을 각각 단독으로 적용해 바뀌는 셀이 있는지 진단한다.
+   *  반환: [{ id, label, changed, samples: ["A → B"], status: "조치 필요"|"문제 없음" }] */
+  function diagnose(table) {
+    const cols = table.columns || [], rows = table.rows || [];
+    const n = Math.min(rows.length, SCAN_ROWS);
+    const base = allOff();
+    return OPTIONS.map((op) => {
+      const o = Object.assign({}, base, op.set);
+      const ctx = D.makeContext();
+      let changed = 0; const samples = [];
+      for (let r = 0; r < n; r++) {
+        const row = rows[r] || [];
+        for (let ci = 0; ci < cols.length; ci++) {
+          const v = row[ci];
+          let out;
+          try { out = D.cleanCellValue(v, o, ctx); } catch (e) { continue; }
+          if (sameCell(v, out)) continue;
+          changed++;
+          if (samples.length < SAMPLE_MAX) samples.push(show(v) + " → " + show(out));
+        }
+      }
+      return { id: op.id, label: op.label, changed, samples, status: changed ? "조치 필요" : "문제 없음" };
+    });
+  }
+
+  return { diagnose, OPTIONS, CONFLICTS, SCAN_ROWS };
+})();
+
 
 /* =====================================================================
  * 7. 결과 Excel 작성기
@@ -6280,6 +6622,7 @@ window.__infoTooltip = InfoTooltip;
     $("btnCleanRun").disabled = busy || files.length === 0;
     $("cleanResultPanel").classList.add("hidden");
     lastOutputs = [];
+    refreshCheckTargets();
   }
   function addFiles(list) {
     setCleanError("");
@@ -6311,6 +6654,171 @@ window.__infoTooltip = InfoTooltip;
     if (p && p.rowsTotal) lines.push("행 : " + (p.rowsDone || 0).toLocaleString() + " / " + p.rowsTotal.toLocaleString());
     $("cleanStatus").innerHTML = lines.join("<br>");
   }
+
+  /* ---------- ③ 공공데이터포털 등록 적합성 점검 · 정제 진단 ---------- */
+  let chkWB = null, chkWBIdx = -1, chkLast = null;
+
+  /** 파일 목록이 바뀌면 점검 대상 셀렉트를 다시 만든다(점검 결과는 초기화). */
+  function refreshCheckTargets() {
+    const sel = $("chkFile");
+    sel.innerHTML = files.map((f, i) => '<option value="' + i + '">' + esc(f.file.name) + "</option>").join("");
+    const has = files.length > 0;
+    sel.disabled = !has;
+    $("btnCheckRun").disabled = !has || busy;
+    $("chkSheet").innerHTML = ""; $("chkSheet").disabled = true;
+    $("chkResult").classList.add("hidden");
+    $("btnCheckDownload").classList.add("hidden");
+    chkWB = null; chkWBIdx = -1; chkLast = null;
+    $("chkStatus").textContent = has
+      ? "점검할 파일을 고르고 [점검하기] 를 눌러 주세요."
+      : "파일을 올리시면 점검할 수 있습니다.";
+  }
+
+  /** 선택한 파일을 표 인식 모드로 읽어 시트 목록을 채운다(같은 파일이면 재사용). */
+  async function loadForCheck(idx) {
+    if (chkWB && chkWBIdx === idx) return chkWB;
+    const f = files[idx];
+    if (!f) throw new Error("점검할 파일을 찾지 못했습니다.");
+    $("chkStatus").textContent = "파일을 읽고 있습니다...";
+    const wb = await A.loadWorkbook(f.file, null, { tables: true });
+    chkWB = wb; chkWBIdx = idx;
+    const sel = $("chkSheet");
+    sel.innerHTML = wb.sheets.map((n, i) => '<option value="' + i + '">' + esc(n) + "</option>").join("");
+    sel.disabled = wb.sheets.length <= 1;
+    return wb;
+  }
+
+  /** 선택한 파일·시트를 점검한다. */
+  async function runCheck() {
+    if (busy || !files.length) return;
+    const fi = parseInt($("chkFile").value, 10) || 0;
+    $("btnCheckRun").disabled = true;
+    try {
+      const wb = await loadForCheck(fi);
+      const si = parseInt($("chkSheet").value, 10) || 0;
+      const table = wb.readSheet(si);
+      if (!table || !table.columns.length) throw new Error("표를 인식하지 못했습니다(빈 시트일 수 있습니다).");
+      await yieldUi();
+      $("chkStatus").textContent = "점검하고 있습니다...";
+      // 병합 셀: xlsx 원본이 있을 때만(csv/xls 는 병합 개념이 없거나 읽지 않음)
+      let merges = null;
+      const sheetIdx = (table.meta && table.meta.sheetIndex) || 0;
+      if (wb._xlsx) { try { merges = A.XlsxReader.merges(wb._xlsx, sheetIdx); } catch (e) { merges = null; } }
+      const csvEnc = extOf(files[fi].file.name) === "csv" ? ($("cl_csvin").value === "cp949" ? "cp949" : null) : null;
+      const res = PortalCheck.check(table, {
+        fileName: files[fi].file.name, sheetName: wb.sheets[si],
+        merges, csvEncoding: csvEnc, deid: A.DeidEngine,
+      });
+      const diag = CleanDiag.diagnose(table);
+      chkLast = { res, diag, fileName: files[fi].file.name, sheetName: wb.sheets[si], table };
+      renderCheck(chkLast);
+      $("chkResult").classList.remove("hidden");
+      $("btnCheckDownload").classList.remove("hidden");
+      const scanNote = res.sampled ? " (값 점검은 상위 " + res.scanned.toLocaleString() + "행 표본 기준)" : "";
+      $("chkStatus").innerHTML = "점검 완료 — <b>" + esc(files[fi].file.name) + "</b> / " + esc(wb.sheets[si]) +
+        " · " + table.rows.length.toLocaleString() + "행 × " + table.columns.length + "열" + scanNote;
+    } catch (err) {
+      console.error(err);
+      $("chkResult").classList.add("hidden");
+      $("btnCheckDownload").classList.add("hidden");
+      $("chkStatus").textContent = "점검하지 못했습니다: " + ((err && err.message) || err);
+    } finally {
+      $("btnCheckRun").disabled = busy || !files.length;
+    }
+  }
+
+  const LV_CLASS = { "위반": "chk-bad", "주의": "chk-warn", "통과": "chk-ok" };
+
+  function renderCheck(c) {
+    const { res, diag } = c;
+    const verdict = res.counts.bad ? ["수정 필요", "chk-bad"]
+      : res.counts.warn ? ["확인 권장", "chk-warn"] : ["등록 가능", "chk-ok"];
+    $("chkScore").innerHTML =
+      '<div class="stat"><b class="' + verdict[1] + '" style="background:none;padding:0;">' + verdict[0] + "</b>종합 판정</div>" +
+      '<div class="stat"><b style="color:#c62828">' + res.counts.bad + "</b>위반</div>" +
+      '<div class="stat"><b style="color:#b98a00">' + res.counts.warn + "</b>주의</div>" +
+      '<div class="stat"><b style="color:#2e7d32">' + res.counts.ok + "</b>통과</div>" +
+      '<div class="stat"><b>' + diag.filter((d) => d.changed).length + "</b>필요한 정제 옵션</div>";
+
+    // 위반 → 주의 → 통과 순으로 정렬(같은 등급은 원래 순서 유지)
+    const order = { "위반": 0, "주의": 1, "통과": 2 };
+    const items = res.items.slice().sort((a, b) => order[a.level] - order[b.level]);
+    $("chkTable").querySelector("thead").innerHTML =
+      "<tr><th style='width:64px'>판정</th><th style='width:76px'>구분</th><th>점검 항목</th><th>예시 / 조치</th></tr>";
+    $("chkTable").querySelector("tbody").innerHTML = items.map((it) => {
+      const ex = it.samples.length ? '<div class="chk-ex">' + it.samples.map(esc).join("<br>") + "</div>" : "";
+      const fix = it.fix ? '<button type="button" class="secondary chk-fix" data-opt="' + it.fix +
+        '" style="margin-top:4px;">이 옵션 켜기</button>' : "";
+      return "<tr><td class='chk-lv'><span class='chk-badge " + LV_CLASS[it.level] + "'>" + it.level + "</span></td>" +
+        "<td class='chk-lv'>" + esc(it.group) + "</td>" +
+        "<td><b>" + esc(it.title) + "</b>" + (it.detail ? '<div class="muted">' + esc(it.detail) + "</div>" : "") + "</td>" +
+        "<td>" + ex + fix + "</td></tr>";
+    }).join("");
+
+    $("chkOptTable").querySelector("thead").innerHTML =
+      "<tr><th style='width:88px'>상태</th><th>정제 옵션</th><th style='width:88px'>대상 셀</th><th>예시</th><th style='width:96px'>적용</th></tr>";
+    $("chkOptTable").querySelector("tbody").innerHTML = diag.map((d) => {
+      const on = $(d.id) && $(d.id).checked;
+      const need = d.changed > 0;
+      return "<tr><td class='chk-lv'><span class='chk-badge " + (need ? "chk-warn" : "chk-ok") + "'>" +
+        (need ? "조치 필요" : "문제 없음") + "</span></td>" +
+        "<td>" + esc(d.label) + (on ? " <span class='muted'>(켜짐)</span>" : "") + "</td>" +
+        "<td>" + (need ? d.changed.toLocaleString() + "셀" : "-") + "</td>" +
+        "<td>" + (d.samples.length ? '<span class="chk-ex">' + d.samples.map(esc).join("<br>") + "</span>" : '<span class="muted">-</span>') + "</td>" +
+        "<td>" + (need && !on ? '<button type="button" class="secondary chk-fix" data-opt="' + d.id + '">켜기</button>'
+          : (on ? "<span class='muted'>적용됨</span>" : "<span class='muted'>-</span>")) + "</td></tr>";
+    }).join("");
+
+    // 동시에 켜면 충돌하는 조합 안내
+    const clash = CleanDiag.CONFLICTS.filter((pair) => pair.every((id) => $(id) && $(id).checked))
+      .map((pair) => pair.map((id) => labelOfOpt(id)).join(" + "));
+    $("chkOptNote").innerHTML = clash.length
+      ? "⚠ 서로 상쇄되는 옵션이 함께 켜져 있습니다: <b>" + clash.map(esc).join("</b>, <b>") + "</b>"
+      : "";
+
+    document.querySelectorAll(".chk-fix").forEach((b) => b.addEventListener("click", () => {
+      const el = $(b.dataset.opt);
+      if (!el) return;
+      el.checked = true;
+      el.dispatchEvent(new Event("change"));
+      $("cleanOptPanel").classList.remove("collapsed");
+      renderCheck(chkLast);            // 상태 표시 갱신
+    }));
+  }
+  function labelOfOpt(id) {
+    const o = CleanDiag.OPTIONS.find((x) => x.id === id);
+    return o ? o.label : id;
+  }
+
+  $("btnCheckRun").addEventListener("click", runCheck);
+  $("chkFile").addEventListener("change", () => {
+    chkWB = null; chkWBIdx = -1;
+    $("chkSheet").innerHTML = ""; $("chkSheet").disabled = true;
+    $("chkResult").classList.add("hidden"); $("btnCheckDownload").classList.add("hidden");
+    $("chkStatus").textContent = "[점검하기] 를 눌러 주세요.";
+  });
+  $("chkSheet").addEventListener("change", () => { if (chkWB) runCheck(); });
+
+  // 점검 결과 Excel: [적합성점검] + [정제진단] 2시트
+  $("btnCheckDownload").addEventListener("click", () => {
+    if (!chkLast) return;
+    const { res, diag, fileName, sheetName } = chkLast;
+    const SLOT = { "위반": 3, "주의": 1, "통과": 2 };
+    const rows = res.items.map((it) => [it.level, it.group, it.title, it.detail, it.count, it.samples.join(" / "), labelOfOpt(it.fix)]);
+    const slots = res.items.map((it) => SLOT[it.level] || 0);
+    const dRows = diag.map((d) => [d.status, d.label, d.changed, d.samples.join(" / ")]);
+    const dSlots = diag.map((d) => (d.changed ? 1 : 2));
+    const bytes = A.XlsxWriter.buildWorkbook([
+      { name: "적합성점검", columns: ["판정", "구분", "점검 항목", "설명", "건수", "예시", "관련 정제 옵션"], rows, fillSlots: slots },
+      { name: "정제진단", columns: ["상태", "정제 옵션", "대상 셀", "예시"], rows: dRows, fillSlots: dSlots },
+      { name: "점검정보", columns: ["항목", "값"], rows: [
+        ["파일", fileName], ["시트/표", sheetName],
+        ["행 수", chkLast.table.rows.length], ["열 수", chkLast.table.columns.length],
+        ["값 점검 범위", res.sampled ? "상위 " + res.scanned + "행 표본" : "전체 행"],
+      ], fillSlots: null },
+    ]);
+    Downloader.saveXlsx(bytes, "등록적합성점검_" + safeName(baseOf(fileName)) + ".xlsx");
+  });
 
   async function runBatch() {
     if (busy || !files.length) return;
